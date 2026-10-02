@@ -2,7 +2,8 @@ import { PrismaClient, Role } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
-const DAYS = 30;
+// Tre mesi di storico: abbastanza per grafici e filtri per intervallo senza un token GitHub.
+const DAYS = 90;
 
 // Credenziali solo per l'ambiente demo, documentate nel README. Mai usare il seed in produzione.
 const DEMO_PASSWORD = 'demo-password';
@@ -30,25 +31,29 @@ async function main(): Promise<void> {
   const repos = [
     { githubId: 1001, name: 'acme/web-app', url: 'https://github.com/acme/web-app' },
     { githubId: 1002, name: 'acme/api-gateway', url: 'https://github.com/acme/api-gateway' },
+    { githubId: 1003, name: 'acme/infra', url: 'https://github.com/acme/infra', isPrivate: true },
   ];
 
   for (const [index, data] of repos.entries()) {
     const repo = await prisma.repository.upsert({
       where: { userId_githubId: { userId: user.id, githubId: data.githubId } },
-      update: { lastSyncedAt: new Date() },
-      create: { ...data, userId: user.id, lastSyncedAt: new Date() },
+      update: { lastSyncedAt: new Date(), syncStatus: 'IDLE' },
+      create: { ...data, defaultBranch: 'main', userId: user.id, lastSyncedAt: new Date() },
     });
 
     for (let day = DAYS - 1; day >= 0; day--) {
       const t = DAYS - day;
-      const metrics = {
-        openIssues: 20 + index * 10 + Math.round(5 * Math.sin(t / 4)),
-        closedIssues: 3 * t + index * 5,
-        openPRs: 4 + ((t + index) % 5),
-        mergedPRs: 2 * t + index,
-        ciPassRate: Math.round((0.85 + 0.1 * Math.cos(t / 3)) * 100) / 100,
-      };
       const date = startOfDayUtc(day);
+      const weekend = date.getUTCDay() === 0 || date.getUTCDay() === 6;
+      // Valori giornalieri (chiuse/merged del giorno) come quelli prodotti dal sync reale.
+      const metrics = {
+        openIssues: 20 + index * 10 + Math.round(5 * Math.sin(t / 7)) + Math.floor(t / 30),
+        closedIssues: weekend ? 0 : (t + index) % 4,
+        openPRs: 4 + ((t + index) % 5),
+        mergedPRs: weekend ? 0 : (t * (index + 1)) % 3,
+        // Nel weekend nessuna run CI: ciPassRate null, come nel sync reale.
+        ciPassRate: weekend ? null : Math.round((0.85 + 0.1 * Math.cos(t / 5 + index)) * 100) / 100,
+      };
       await prisma.metrics.upsert({
         where: { repositoryId_date: { repositoryId: repo.id, date } },
         update: metrics,

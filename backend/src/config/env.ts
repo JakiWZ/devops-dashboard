@@ -25,6 +25,17 @@ const envSchema = z.object({
   APP_URL: z.string().url().default('http://localhost:5173'),
   RESEND_API_KEY: z.string().min(1).optional(),
   EMAIL_FROM: z.string().min(1).default('DevOps Dashboard <onboarding@resend.dev>'),
+  // Chiave AES-256 (32 byte in base64) per cifrare i token GitHub. Senza chiave l'integrazione è disattivata.
+  GITHUB_TOKEN_ENC_KEY: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z
+      .string()
+      .refine((value) => Buffer.from(value, 'base64').length === 32, 'must be 32 bytes in base64')
+      .optional(),
+  ),
+  // Intervallo del sync automatico dei repository; 0 lo disattiva.
+  SYNC_INTERVAL_MINUTES: z.coerce.number().int().min(0).default(360),
+  SYNC_RATE_LIMIT: z.coerce.number().int().positive().default(10),
 });
 
 export type Env = z.infer<typeof envSchema>;
