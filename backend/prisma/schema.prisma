@@ -86,8 +86,17 @@ model Repository {
 model Report {
   id           String     @id @default(cuid())
   repositoryId String
+  // Markdown renderizzato dal server a partire da `data`: è ciò che viene mostrato ed esportato.
   content      String
   summary      String
+  // Output strutturato del modello (validato con Zod). null per i report creati prima della Fase 4.
+  data         Json?
+  // Modello che ha servito la risposta (può differire da quello richiesto se interviene un fallback).
+  model        String?
+  periodStart  DateTime?
+  periodEnd    DateTime?
+  inputTokens  Int?
+  outputTokens Int?
   generatedAt  DateTime   @default(now())
   repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
 

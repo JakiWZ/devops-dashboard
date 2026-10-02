@@ -8,13 +8,22 @@ export interface GitHubRepoInfo {
 
 /** Issue o pull request (l'endpoint issues di GitHub restituisce entrambe). */
 export interface GitHubIssue {
+  number: number;
+  title: string;
+  url: string;
   isPullRequest: boolean;
+  /** Solo per le PR: bozza non ancora pronta per la review. */
+  isDraft: boolean;
+  updatedAt: Date;
   createdAt: Date;
   closedAt: Date | null;
   mergedAt: Date | null;
 }
 
 export interface GitHubWorkflowRun {
+  /** Nome del workflow (es. "CI"). */
+  name: string;
+  url: string;
   createdAt: Date;
   conclusion: string | null;
 }

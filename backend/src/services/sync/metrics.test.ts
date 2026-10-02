@@ -2,9 +2,17 @@ import type { GitHubIssue } from '../github/github.types.js';
 import { computeDailyMetrics, daysBetween } from './metrics.js';
 
 const d = (iso: string) => new Date(iso);
+const ISSUE_DETAILS = {
+  number: 1,
+  title: 't',
+  url: '',
+  isDraft: false,
+  updatedAt: d('2026-09-01'),
+};
 
 function issue(created: string, closed: string | null = null): GitHubIssue {
   return {
+    ...ISSUE_DETAILS,
     isPullRequest: false,
     createdAt: d(created),
     closedAt: closed ? d(closed) : null,
@@ -14,6 +22,7 @@ function issue(created: string, closed: string | null = null): GitHubIssue {
 
 function pull(created: string, closed: string | null = null, merged = false): GitHubIssue {
   return {
+    ...ISSUE_DETAILS,
     isPullRequest: true,
     createdAt: d(created),
     closedAt: closed ? d(closed) : null,
@@ -62,12 +71,12 @@ describe('computeDailyMetrics', () => {
 
   it('computes the CI pass rate ignoring cancelled and in-progress runs', () => {
     const runs = [
-      { createdAt: d('2026-09-01T01:00:00Z'), conclusion: 'success' },
-      { createdAt: d('2026-09-01T02:00:00Z'), conclusion: 'success' },
-      { createdAt: d('2026-09-01T03:00:00Z'), conclusion: 'failure' },
-      { createdAt: d('2026-09-01T04:00:00Z'), conclusion: 'cancelled' },
-      { createdAt: d('2026-09-01T05:00:00Z'), conclusion: null },
-      { createdAt: d('2026-09-02T01:00:00Z'), conclusion: 'timed_out' },
+      { name: 'CI', url: '', createdAt: d('2026-09-01T01:00:00Z'), conclusion: 'success' },
+      { name: 'CI', url: '', createdAt: d('2026-09-01T02:00:00Z'), conclusion: 'success' },
+      { name: 'CI', url: '', createdAt: d('2026-09-01T03:00:00Z'), conclusion: 'failure' },
+      { name: 'CI', url: '', createdAt: d('2026-09-01T04:00:00Z'), conclusion: 'cancelled' },
+      { name: 'CI', url: '', createdAt: d('2026-09-01T05:00:00Z'), conclusion: null },
+      { name: 'CI', url: '', createdAt: d('2026-09-02T01:00:00Z'), conclusion: 'timed_out' },
     ];
     const metrics = computeDailyMetrics([], runs, days);
 

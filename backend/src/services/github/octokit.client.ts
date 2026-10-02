@@ -76,6 +76,11 @@ function toRepoInfo(repo: RawRepo): GitHubRepoInfo {
 }
 
 interface RawIssue {
+  number?: number;
+  title?: string;
+  html_url?: string;
+  draft?: boolean;
+  updated_at?: string;
   created_at: string;
   closed_at: string | null;
   pull_request?: { merged_at?: string | null };
@@ -83,7 +88,12 @@ interface RawIssue {
 
 function toIssue(issue: RawIssue): GitHubIssue {
   return {
+    number: issue.number ?? 0,
+    title: issue.title ?? '',
+    url: issue.html_url ?? '',
     isPullRequest: issue.pull_request !== undefined,
+    isDraft: issue.draft ?? false,
+    updatedAt: new Date(issue.updated_at ?? issue.created_at),
     createdAt: new Date(issue.created_at),
     closedAt: toDate(issue.closed_at),
     mergedAt: toDate(issue.pull_request?.merged_at),
@@ -243,6 +253,8 @@ export class OctokitGitHubClient implements GitHubClient {
         }),
       );
       return runs.map((run) => ({
+        name: run.name ?? 'workflow',
+        url: run.html_url,
         createdAt: new Date(run.created_at),
         conclusion: run.conclusion,
       }));
