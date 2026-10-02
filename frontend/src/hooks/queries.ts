@@ -1,5 +1,5 @@
 import { useQueries, useQuery } from '@tanstack/react-query';
-import { githubApi, reportsApi, reposApi, type ReportFilters } from '../api/endpoints';
+import { aiApi, githubApi, reportsApi, reposApi, type ReportFilters } from '../api/endpoints';
 import type { Range } from '../lib/dates';
 import { aggregateMetrics, type DailyPoint } from '../lib/metrics';
 
@@ -12,7 +12,22 @@ export const queryKeys = {
   reports: ['reports'] as const,
   reportList: (filters: ReportFilters) => ['reports', 'list', filters] as const,
   report: (id: string) => ['reports', id] as const,
+  aiSettings: ['ai', 'settings'] as const,
+  aiProviders: ['ai', 'providers'] as const,
 };
+
+export function useAiSettings() {
+  return useQuery({ queryKey: queryKeys.aiSettings, queryFn: aiApi.settings });
+}
+
+export function useAiProviders() {
+  // Il catalogo cambia al massimo una volta al giorno.
+  return useQuery({
+    queryKey: queryKeys.aiProviders,
+    queryFn: aiApi.providers,
+    staleTime: 60 * 60_000,
+  });
+}
 
 export function useRepositories() {
   return useQuery({ queryKey: queryKeys.repos, queryFn: reposApi.list });
