@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { fetchHealth, type HealthResponse } from '../api/client';
+import { fetchHealth, type HealthResponse } from '../api/health';
 
 export type HealthState =
   | { kind: 'loading' }
