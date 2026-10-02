@@ -1,5 +1,12 @@
 import type { Response } from 'supertest';
+import { HttpError } from '../lib/http-error.js';
 import { prisma } from '../lib/prisma.js';
+import type {
+  GitHubClient,
+  GitHubIssue,
+  GitHubRepoInfo,
+  GitHubWorkflowRun,
+} from '../services/github/github.types.js';
 import type { EmailMessage, EmailSender } from '../services/email.service.js';
 
 export async function resetDatabase(): Promise<void> {
@@ -27,4 +34,38 @@ export function getSetCookieHeader(res: Response, name: string): string | undefi
   const header = res.headers['set-cookie'] as unknown;
   const cookies = Array.isArray(header) ? (header as string[]) : [];
   return cookies.find((c) => c.startsWith(`${name}=`));
+}
+
+export class FakeGitHubClient implements GitHubClient {
+  repos: GitHubRepoInfo[] = [];
+  open: GitHubIssue[] = [];
+  closed: GitHubIssue[] = [];
+  runs: GitHubWorkflowRun[] = [];
+  closedSince: Date[] = [];
+  fail: Error | null = null;
+
+  constructor(readonly login = 'octocat') {}
+
+  async getLogin(): Promise<string> {
+    return this.login;
+  }
+  async listUserRepos(): Promise<GitHubRepoInfo[]> {
+    return this.repos;
+  }
+  async getRepo(fullName: string): Promise<GitHubRepoInfo> {
+    const repo = this.repos.find((r) => r.fullName === fullName);
+    if (!repo) throw new HttpError(404, 'Repository not found on GitHub', 'GITHUB_NOT_FOUND');
+    return repo;
+  }
+  async listOpenIssues(): Promise<GitHubIssue[]> {
+    if (this.fail) throw this.fail;
+    return this.open;
+  }
+  async listClosedIssuesSince(_fullName: string, since: Date): Promise<GitHubIssue[]> {
+    this.closedSince.push(since);
+    return this.closed;
+  }
+  async listWorkflowRunsSince(): Promise<GitHubWorkflowRun[]> {
+    return this.runs;
+  }
 }

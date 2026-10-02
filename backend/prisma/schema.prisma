@@ -12,29 +12,38 @@ enum Role {
   USER
 }
 
+enum SyncStatus {
+  IDLE
+  SYNCING
+  FAILED
+}
+
 model User {
-  id           String       @id @default(cuid())
-  email        String       @unique
-  passwordHash String
-  role         Role         @default(USER)
-  createdAt    DateTime     @default(now())
-  repositories Repository[]
+  id                  String               @id @default(cuid())
+  email               String               @unique
+  passwordHash        String
+  role                Role                 @default(USER)
+  createdAt           DateTime             @default(now())
+  // Personal access token GitHub cifrato con AES-256-GCM (mai in chiaro nel DB).
+  githubTokenEnc      String?
+  githubLogin         String?
+  repositories        Repository[]
   refreshTokens       RefreshToken[]
   passwordResetTokens PasswordResetToken[]
 }
 
 // Refresh token opachi: in DB solo l'hash SHA-256, mai il valore in chiaro.
 model RefreshToken {
-  id         String    @id @default(cuid())
-  userId     String
-  tokenHash  String    @unique
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
   // Tutti i token nati dalla stessa login condividono la family: il riuso di un token
   // già ruotato revoca l'intera family (rilevamento furto).
-  familyId   String
-  expiresAt  DateTime
-  revokedAt  DateTime?
-  createdAt  DateTime  @default(now())
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  familyId  String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([familyId])
@@ -53,15 +62,22 @@ model PasswordResetToken {
 }
 
 model Repository {
-  id           String    @id @default(cuid())
-  userId       String
-  githubId     Int
-  name         String
-  url          String
-  lastSyncedAt DateTime?
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  reports      Report[]
-  metrics      Metrics[]
+  id            String     @id @default(cuid())
+  userId        String
+  githubId      Int
+  name          String
+  url           String
+  defaultBranch String?
+  isPrivate     Boolean    @default(false)
+  syncStatus    SyncStatus @default(IDLE)
+  // Inizio del sync in corso: permette di riprendere un lock rimasto appeso dopo un crash.
+  syncStartedAt DateTime?
+  lastSyncError String?
+  lastSyncedAt  DateTime?
+  createdAt     DateTime   @default(now())
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reports       Report[]
+  metrics       Metrics[]
 
   @@unique([userId, githubId])
   @@index([userId])
@@ -86,7 +102,8 @@ model Metrics {
   closedIssues Int
   openPRs      Int
   mergedPRs    Int
-  ciPassRate   Float
+  // null quando nel giorno non ci sono run CI concluse con successo o fallimento.
+  ciPassRate   Float?
   repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
 
   @@unique([repositoryId, date])
