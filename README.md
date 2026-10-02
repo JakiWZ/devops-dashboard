@@ -3,22 +3,22 @@
 Dashboard full-stack che monitora repository GitHub e genera report intelligenti con AI.
 Progetto dimostrativo sviluppato interamente con Claude Code. Specifica completa in [`SPEC.md`](SPEC.md).
 
-> **Stato:** Fase 4 (report AI) — oltre ad auth (Fase 2) e integrazione GitHub con metriche giornaliere (Fase 3), generazione di report settimanali con Claude (riassunto, tech debt, priorità), storico ed export Markdown/PDF. Frontend completo e notifiche arrivano nelle fasi successive.
+> **Stato:** Fase 5 (frontend) — oltre ad auth (Fase 2), integrazione GitHub con metriche giornaliere (Fase 3) e report AI (Fase 4), la dashboard React: login/registrazione, overview con KPI e grafici, pagine repository e report, filtri per data/repository/stato, dark mode, test E2E con Playwright. Notifiche e deploy arrivano nelle fasi successive.
 
 ## Stack
 
-| Layer    | Tecnologia                                             |
-| -------- | ------------------------------------------------------ |
-| Frontend | React 19, TypeScript 5.9, Vite 8, Tailwind CSS 4       |
-| Backend  | Node.js 22, Express 5, TypeScript 5.9, Zod 4, Pino 10  |
-| Database | PostgreSQL 16, Prisma 6                                |
-| Test     | Jest 30 + Supertest (backend), Vitest (frontend, unit) |
-| CI       | GitHub Actions                                         |
+| Layer    | Tecnologia                                                                                     |
+| -------- | ---------------------------------------------------------------------------------------------- |
+| Frontend | React 19, TypeScript 5.9, Vite 8, Tailwind CSS 4, React Router 8, TanStack Query 5, Recharts 3 |
+| Backend  | Node.js 22, Express 5, TypeScript 5.9, Zod 4, Pino 10                                          |
+| Database | PostgreSQL 16, Prisma 6                                                                        |
+| Test     | Jest 30 + Supertest (backend), Vitest (frontend, unit), Playwright (E2E)                       |
+| CI       | GitHub Actions                                                                                 |
 
 ## Struttura
 
 ```
-frontend/   React + Vite        src/{components,pages,hooks,lib,api}
+frontend/   React + Vite        src/{api,auth,components,pages,hooks,lib}, e2e/ (Playwright)
 backend/    Express + Prisma    src/{routes,controllers,services,middleware,lib,config}, prisma/
 .github/workflows/ci.yml
 ```
@@ -44,6 +44,16 @@ npm run dev                   # http://localhost:5173 (proxy /api -> :4000)
 ```
 
 In ogni package: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`.
+
+Test E2E (dal frontend, con Postgres attivo e il DB di `backend/.env` migrato e con il seed):
+
+```bash
+cd frontend
+npx playwright install chromium   # una volta
+npm run test:e2e                  # avvia backend (:4000) e Vite (:5173) se non sono già attivi
+```
+
+La generazione AI nel test E2E è intercettata (serve `ANTHROPIC_API_KEY`); login, navigazione ed export usano il backend vero.
 I test backend sono di integrazione e **svuotano** il database indicato in `TEST_DATABASE_URL`: usa un DB dedicato.
 
 Utenti demo creati dal seed (solo per sviluppo): `demo@example.com` (ADMIN) e `user@example.com` (USER), password `demo-password`.
@@ -117,7 +127,7 @@ Metriche giornaliere (UTC): `openIssues` e `openPRs` sono lo stato a fine giorna
 - **Prisma 6 invece di 7** — Prisma 7 richiede driver adapter e `prisma.config.ts`; per la fase base restiamo sulla linea stabile più diffusa, migrazione pianificata in seguito.
 - **TypeScript 5.9 invece di 6** — ts-jest e typescript-eslint non dichiarano ancora il supporto a TS 6.
 - **Probe del DB iniettabile in `createApp`** — permette di testare `/api/health` senza database reale. Alternativa scartata: mock globale del modulo Prisma, più fragile con ESM.
-- **Vitest per i test unitari frontend** — condivide config e trasformazioni con Vite; Jest scartato lato frontend perché richiederebbe una pipeline di trasformazione separata. Playwright (E2E) arriverà in Fase 5.
+- **Vitest per i test unitari frontend** — condivide config e trasformazioni con Vite; Jest scartato lato frontend perché richiederebbe una pipeline di trasformazione separata. Playwright per gli E2E.
 - **Dark mode via classe `.dark`** — consente sia il default di sistema sia la scelta esplicita salvata in `localStorage`. Alternativa scartata: solo `prefers-color-scheme`, che non permette il toggle.
 - **Access token JWT breve (15 min) + refresh token opaco in cookie httpOnly** — l'access token vive in memoria nel frontend, il refresh non è leggibile da JavaScript (mitiga XSS). Alternativa scartata: refresh JWT in `localStorage`, esposto a XSS e non revocabile.
 - **Refresh token salvati come hash SHA-256, con rotazione e "family"** — un dump del DB non espone token utilizzabili; il riuso di un token già ruotato revoca l'intera sessione (rilevamento furto). SHA-256 invece di bcrypt perché i token sono casuali a 256 bit. Alternativa scartata: refresh JWT stateless, impossibile da revocare.
@@ -142,6 +152,15 @@ Metriche giornaliere (UTC): `openIssues` e `openPRs` sono lo stato a fine giorna
 - **Senza GitHub collegato il report usa solo le metriche** — così funziona anche sui dati del seed; il report lo dichiara e non elenca singole issue.
 - **Generazione sincrona con lock per repository** — una richiesta HTTP di 30-90 s è accettabile per un'azione manuale; un `Set` in memoria impedisce due generazioni parallele dello stesso repository (`409`). Alternativa scartata per ora: coda di job con polling, necessaria con più istanze o generazioni schedulate (Fase 6).
 - **PDF con pdfkit dal nostro Markdown** — libreria JS pura, nessun browser headless da installare su Railway. Rende solo il sottoinsieme di Markdown che generiamo noi; font standard Helvetica (caratteri non latini non supportati, vedi TODO).
+- **TanStack Query per i dati del server invece di `useEffect` + stato locale** — cache, deduplica, invalidazione dopo sync/generazione e stati di caricamento/errore uniformi. Alternativa scartata: Redux Toolkit Query, che porta con sé Redux senza averne bisogno.
+- **React Router 8 in modalità dati (`createBrowserRouter`)** — rotte protette con un layout `RequireAuth`, filtri nei query param (ricaricabili e condivisibili). Alternativa scartata: TanStack Router, più tipizzato ma un'altra dipendenza da imparare per poche rotte.
+- **Risposte API validate con Zod anche nel frontend** — un cambio di contratto del backend diventa un errore esplicito, non un `undefined` nei componenti.
+- **Refresh del token condiviso tra richieste concorrenti** — il backend tratta il riuso di un refresh token già ruotato come furto e revoca la sessione: due refresh in parallelo (React StrictMode, più query con 401) la chiuderebbero. Una sola promise in volo per tutte.
+- **Export dei report via `fetch` + blob invece di un link** — l'endpoint richiede il Bearer token, che vive solo in memoria; un `<a href>` non lo invierebbe.
+- **Grafici issue/PR come due pannelli sincronizzati (stock in linea, flusso giornaliero a barre)** — aperte e chiuse al giorno hanno scale molto diverse; un doppio asse Y le renderebbe confrontabili solo in apparenza. Crosshair condiviso con `syncId`, tabella dati apribile sotto ogni grafico.
+- **Palette dei grafici validata per daltonismo, colori in variabili CSS** — slot 1-2 della palette categoriale di riferimento (blu/arancio), controllati con un validatore CVD/contrasto per tema chiaro e scuro; le variabili cambiano con la classe `.dark` senza re-render.
+- **Pass rate CI aggregato come media semplice dei repository con run** — il backend non espone il numero di run giornaliere, quindi non si può pesare; i giorni senza run restano vuoti invece di valere 0%.
+- **E2E contro backend e Postgres veri, solo la POST di generazione intercettata** — login, refresh, filtri ed export passano dal codice reale; la chiamata a Claude richiede una chiave e costa. Alternativa scartata: mock di tutte le API, che non avrebbe verificato l'integrazione.
 - **`closedIssues` e `mergedPRs` sono conteggi giornalieri** — il seed della Fase 1 li trattava come cumulativi; ora seed e sync usano la stessa semantica, e i totali si ottengono sommando la serie.
 
 ## TODO
@@ -155,5 +174,6 @@ Metriche giornaliere (UTC): `openIssues` e `openPRs` sono lo stato a fine giorna
 - Report AI: crea una chiave API su [platform.claude.com](https://platform.claude.com) e imposta `ANTHROPIC_API_KEY`. La chiamata reale a Claude non è stata provata in sviluppo (nessuna chiave disponibile): i test esercitano l'SDK con risposte HTTP simulate.
 - PDF: embeddare un font Unicode (es. Noto Sans) per titoli con caratteri non latini.
 - Generazione report in background (coda + polling) quando arriveranno i report schedulati della Fase 6.
+- Frontend: pagine "password dimenticata" e "reset password" (il backend le supporta, il link email punta a `/reset-password`) e collegamento GitHub via OAuth quando ci sarà la OAuth App.
 
 - Deploy (Fase 7): richiede account Railway (backend + Postgres) e Vercel (frontend) — da configurare dal maintainer.

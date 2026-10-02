@@ -2,3 +2,69 @@
 
 /* Dark mode guidata dalla classe .dark su <html>, così può seguire sia il sistema sia una scelta esplicita. */
 @custom-variant dark (&:where(.dark, .dark *));
+
+/* Palette dei grafici: slot categorici 1-2 della palette di riferimento dataviz, validati
+   (CVD, contrasto >= 3:1) sulla superficie delle card in entrambi i temi. */
+:root {
+  --chart-series-1: #2a78d6;
+  --chart-series-2: #eb6834;
+  --chart-grid: #e2e8f0;
+  --chart-axis: #64748b;
+  --chart-surface: #ffffff;
+}
+
+.dark {
+  --chart-series-1: #3987e5;
+  --chart-series-2: #d95926;
+  --chart-grid: #1e293b;
+  --chart-axis: #94a3b8;
+  --chart-surface: #0f172a;
+}
+
+/* Tipografia minima per il Markdown dei report (evita il plugin typography). */
+.markdown {
+  line-height: 1.65;
+}
+.markdown h1 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0 0 1rem;
+}
+.markdown h2 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin: 1.75rem 0 0.75rem;
+}
+.markdown h3 {
+  font-weight: 600;
+  margin: 1.25rem 0 0.5rem;
+}
+.markdown p,
+.markdown ul,
+.markdown ol,
+.markdown table {
+  margin: 0 0 1rem;
+}
+.markdown ul {
+  list-style: disc;
+  padding-left: 1.5rem;
+}
+.markdown ol {
+  list-style: decimal;
+  padding-left: 1.5rem;
+}
+.markdown a {
+  text-decoration: underline;
+}
+.markdown table {
+  border-collapse: collapse;
+}
+.markdown th,
+.markdown td {
+  border: 1px solid var(--chart-grid);
+  padding: 0.25rem 0.75rem;
+  text-align: left;
+}
+.markdown code {
+  font-size: 0.9em;
+}

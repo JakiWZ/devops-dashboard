@@ -1,4 +1,4 @@
-const API_URL: string = import.meta.env.VITE_API_URL ?? '';
+import { API_URL } from './http';
 
 export interface HealthResponse {
   status: 'ok' | 'degraded';
