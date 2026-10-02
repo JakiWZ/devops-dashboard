@@ -1,0 +1,62 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+model User {
+  id           String       @id @default(cuid())
+  email        String       @unique
+  passwordHash String
+  role         Role         @default(USER)
+  createdAt    DateTime     @default(now())
+  repositories Repository[]
+}
+
+model Repository {
+  id           String    @id @default(cuid())
+  userId       String
+  githubId     Int
+  name         String
+  url          String
+  lastSyncedAt DateTime?
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reports      Report[]
+  metrics      Metrics[]
+
+  @@unique([userId, githubId])
+  @@index([userId])
+}
+
+model Report {
+  id           String     @id @default(cuid())
+  repositoryId String
+  content      String
+  summary      String
+  generatedAt  DateTime   @default(now())
+  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@index([repositoryId, generatedAt])
+}
+
+model Metrics {
+  id           String     @id @default(cuid())
+  repositoryId String
+  date         DateTime   @db.Date
+  openIssues   Int
+  closedIssues Int
+  openPRs      Int
+  mergedPRs    Int
+  ciPassRate   Float
+  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@unique([repositoryId, date])
+}
