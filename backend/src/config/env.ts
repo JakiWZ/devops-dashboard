@@ -36,6 +36,15 @@ const envSchema = z.object({
   // Intervallo del sync automatico dei repository; 0 lo disattiva.
   SYNC_INTERVAL_MINUTES: z.coerce.number().int().min(0).default(360),
   SYNC_RATE_LIMIT: z.coerce.number().int().positive().default(10),
+  // Senza chiave la generazione dei report AI risponde 503.
+  ANTHROPIC_API_KEY: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().min(1).optional(),
+  ),
+  ANTHROPIC_MODEL: z.string().min(1).default('claude-opus-5-5'),
+  REPORT_EFFORT: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).default('medium'),
+  // Report generati per IP ogni ora: ogni report è una chiamata a pagamento all'API Claude.
+  REPORT_RATE_LIMIT: z.coerce.number().int().positive().default(10),
 });
 
 export type Env = z.infer<typeof envSchema>;

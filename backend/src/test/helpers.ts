@@ -8,6 +8,8 @@ import type {
   GitHubWorkflowRun,
 } from '../services/github/github.types.js';
 import type { EmailMessage, EmailSender } from '../services/email.service.js';
+import type { GeneratedReport, ReportGenerator } from '../services/reports/report-generator.js';
+import type { ReportInput } from '../services/reports/report-input.js';
 
 export async function resetDatabase(): Promise<void> {
   await prisma.$executeRawUnsafe(
@@ -67,5 +69,40 @@ export class FakeGitHubClient implements GitHubClient {
   }
   async listWorkflowRunsSince(): Promise<GitHubWorkflowRun[]> {
     return this.runs;
+  }
+}
+
+let issueNumber = 0;
+
+/** Issue di test con valori di default ragionevoli. */
+export function makeIssue(
+  overrides: Partial<GitHubIssue> & Pick<GitHubIssue, 'createdAt'>,
+): GitHubIssue {
+  issueNumber += 1;
+  return {
+    number: issueNumber,
+    title: `Issue ${issueNumber}`,
+    url: `https://github.com/acme/web/issues/${issueNumber}`,
+    isPullRequest: false,
+    closedAt: null,
+    mergedAt: null,
+    updatedAt: overrides.closedAt ?? overrides.createdAt,
+    ...overrides,
+  };
+}
+
+export class FakeReportGenerator implements ReportGenerator {
+  readonly inputs: ReportInput[] = [];
+  async generate(input: ReportInput): Promise<GeneratedReport> {
+    this.inputs.push(input);
+    return {
+      model: 'fake-model',
+      analysis: {
+        summary: `Riepilogo di ${input.repository}`,
+        highlights: [],
+        techDebt: [],
+        priorities: [],
+      },
+    };
   }
 }

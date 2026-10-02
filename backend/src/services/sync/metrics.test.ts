@@ -1,24 +1,20 @@
+import { makeIssue } from '../../test/helpers.js';
 import type { GitHubIssue } from '../github/github.types.js';
 import { computeDailyMetrics, daysBetween } from './metrics.js';
 
 const d = (iso: string) => new Date(iso);
 
 function issue(created: string, closed: string | null = null): GitHubIssue {
-  return {
-    isPullRequest: false,
-    createdAt: d(created),
-    closedAt: closed ? d(closed) : null,
-    mergedAt: null,
-  };
+  return makeIssue({ createdAt: d(created), closedAt: closed ? d(closed) : null });
 }
 
 function pull(created: string, closed: string | null = null, merged = false): GitHubIssue {
-  return {
+  return makeIssue({
     isPullRequest: true,
     createdAt: d(created),
     closedAt: closed ? d(closed) : null,
     mergedAt: merged && closed ? d(closed) : null,
-  };
+  });
 }
 
 describe('daysBetween', () => {

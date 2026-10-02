@@ -8,10 +8,14 @@ export interface GitHubRepoInfo {
 
 /** Issue o pull request (l'endpoint issues di GitHub restituisce entrambe). */
 export interface GitHubIssue {
+  number: number;
+  title: string;
+  url: string;
   isPullRequest: boolean;
   createdAt: Date;
   closedAt: Date | null;
   mergedAt: Date | null;
+  updatedAt: Date;
 }
 
 export interface GitHubWorkflowRun {

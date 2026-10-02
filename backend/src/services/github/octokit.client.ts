@@ -76,15 +76,23 @@ function toRepoInfo(repo: RawRepo): GitHubRepoInfo {
 }
 
 interface RawIssue {
+  number: number;
+  title: string;
+  html_url: string;
   created_at: string;
+  updated_at: string;
   closed_at: string | null;
   pull_request?: { merged_at?: string | null };
 }
 
 function toIssue(issue: RawIssue): GitHubIssue {
   return {
+    number: issue.number,
+    title: issue.title,
+    url: issue.html_url,
     isPullRequest: issue.pull_request !== undefined,
     createdAt: new Date(issue.created_at),
+    updatedAt: new Date(issue.updated_at),
     closedAt: toDate(issue.closed_at),
     mergedAt: toDate(issue.pull_request?.merged_at),
   };

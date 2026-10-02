@@ -1,5 +1,8 @@
 import { PrismaClient, Role } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import type { ReportAnalysis } from '../src/services/reports/report-generator.js';
+import { buildReportInput } from '../src/services/reports/report-input.js';
+import { renderReportMarkdown } from '../src/services/reports/report-render.js';
 
 const prisma = new PrismaClient();
 // Tre mesi di storico: abbastanza per grafici e filtri per intervallo senza un token GitHub.
@@ -13,6 +16,21 @@ function startOfDayUtc(daysAgo: number): Date {
   d.setUTCHours(0, 0, 0, 0);
   d.setUTCDate(d.getUTCDate() - daysAgo);
   return d;
+}
+
+function demoAnalysis(name: string, mergedPRs: number): ReportAnalysis {
+  return {
+    summary: `Report demo per ${name}: ${mergedPRs} PR merged negli ultimi 7 giorni. Generato dal seed, non da Claude.`,
+    highlights: ['Dati demo: collega GitHub e imposta ANTHROPIC_API_KEY per un report reale.'],
+    techDebt: [],
+    priorities: [
+      {
+        title: 'Collegare il repository reale',
+        rationale: 'Senza dati GitHub il report non può individuare issue e PR ferme.',
+        priority: 'medium',
+      },
+    ],
+  };
 }
 
 async function main(): Promise<void> {
@@ -61,16 +79,27 @@ async function main(): Promise<void> {
       });
     }
 
-    const reportCount = await prisma.report.count({ where: { repositoryId: repo.id } });
-    if (reportCount === 0) {
-      await prisma.report.create({
-        data: {
-          repositoryId: repo.id,
-          summary: `Demo weekly summary for ${data.name}`,
-          content: `# ${data.name}\n\nReport demo generato dal seed. I report reali arrivano in Fase 4.`,
-        },
-      });
-    }
+    // Report demo costruito con lo stesso renderer dei report reali, ma senza chiamare l'LLM.
+    // Rimpiazza i report demo precedenti, compresi i placeholder delle fasi 1-3.
+    await prisma.report.deleteMany({
+      where: {
+        repositoryId: repo.id,
+        OR: [{ model: 'seed' }, { summary: { startsWith: 'Demo weekly summary for' } }],
+      },
+    });
+    const metrics = await prisma.metrics.findMany({ where: { repositoryId: repo.id } });
+    const input = buildReportInput(data.name, metrics, null, new Date());
+    const analysis = demoAnalysis(data.name, input.thisWeek.mergedPRs);
+    await prisma.report.create({
+      data: {
+        repositoryId: repo.id,
+        summary: analysis.summary,
+        content: renderReportMarkdown(input, analysis),
+        model: 'seed',
+        periodStart: input.periodStart,
+        periodEnd: input.periodEnd,
+      },
+    });
   }
 
   console.log(

@@ -11,3 +11,4 @@ process.env.AUTH_RATE_LIMIT = '1000';
 // Chiave fittizia, valida solo nei test.
 process.env.GITHUB_TOKEN_ENC_KEY = Buffer.alloc(32, 7).toString('base64');
 process.env.SYNC_RATE_LIMIT = '1000';
+process.env.REPORT_RATE_LIMIT = '1000';

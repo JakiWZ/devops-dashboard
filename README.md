@@ -3,7 +3,7 @@
 Dashboard full-stack che monitora repository GitHub e genera report intelligenti con AI.
 Progetto dimostrativo sviluppato interamente con Claude Code. Specifica completa in [`SPEC.md`](SPEC.md).
 
-> **Stato:** Fase 3 (GitHub e metriche) — oltre all'auth della Fase 2, collegamento a GitHub con personal access token, repository tracciati, sync di issue/PR/CI in metriche giornaliere, cache ETag e sync automatico. Report AI, frontend completo e notifiche arrivano nelle fasi successive.
+> **Stato:** Fase 4 (report AI) — oltre ad auth (Fase 2) e integrazione GitHub con metriche giornaliere (Fase 3), report settimanali generati con Claude, salvati con storico ed esportabili in Markdown e PDF. Frontend completo e notifiche arrivano nelle fasi successive.
 
 ## Stack
 
@@ -56,6 +56,10 @@ Utenti demo creati dal seed (solo per sviluppo): `demo@example.com` (ADMIN) e `u
 
 Il sync automatico gira nel processo dell'API ogni `SYNC_INTERVAL_MINUTES` (default 360, `0` lo disattiva).
 
+### Report AI
+
+Imposta `ANTHROPIC_API_KEY` nel `.env` (senza chiave `POST /api/reports` risponde `503`). Il report confronta gli ultimi 7 giorni con i 7 precedenti usando le metriche salvate e, se GitHub è collegato, segnala le issue senza aggiornamenti da 30+ giorni e le PR ferme da 7+ giorni. Senza GitHub il report si basa solo sulle metriche. Il seed crea un report demo per repository, scritto senza chiamare Claude.
+
 ## API
 
 | Metodo | Path                        | Descrizione                                                                  |
@@ -80,7 +84,13 @@ Il sync automatico gira nel processo dell'API ogni `SYNC_INTERVAL_MINUTES` (defa
 | GET    | `/api/repos/:id/metrics`    | `?from=YYYY-MM-DD&to=YYYY-MM-DD` (default ultimi 30 giorni, max 366)         |
 | POST   | `/api/repos/:id/sync`       | Sync manuale, `409` se già in corso; rate limit `SYNC_RATE_LIMIT`            |
 
-Le route `/api/github` e `/api/repos` richiedono `Authorization: Bearer <accessToken>`; un repository di un altro utente risponde `404`.
+| GET | `/api/reports` | Storico, più recenti prima; `?repositoryId=&limit=` (max 100) |
+| POST | `/api/reports` | `{ repositoryId }` → `201`, genera e salva il report; rate limit orario |
+| GET | `/api/reports/:id` | Report con contenuto Markdown |
+| GET | `/api/reports/:id/export` | Download, `?format=md` (default) o `?format=pdf` |
+| DELETE | `/api/reports/:id` | Elimina il report (`204`) |
+
+Le route `/api/github`, `/api/repos` e `/api/reports` richiedono `Authorization: Bearer <accessToken>`; un repository o un report di un altro utente risponde `404`.
 
 Metriche giornaliere (UTC): `openIssues` e `openPRs` sono lo stato a fine giornata, `closedIssues` e `mergedPRs` i conteggi del giorno, `ciPassRate` è `success / (success + failure)` delle run GitHub Actions create quel giorno (`null` se non ce ne sono).
 
@@ -109,12 +119,18 @@ Metriche giornaliere (UTC): `openIssues` e `openPRs` sono lo stato a fine giorna
 - **Sync in-process con `setInterval` invece di `node-cron` o di una coda** — basta un intervallo, non un calendario; un lock ottimistico sul repository (`syncStatus` + `syncStartedAt`, ripreso dopo 15 minuti) evita sync concorrenti anche con più istanze. Una coda (BullMQ) servirà solo con molti repository.
 - **Retry sul rate limit solo se l'attesa è ≤ 60 s** — il reset del limite primario può arrivare dopo un'ora: meglio fallire, salvare l'errore in `lastSyncError` e riprovare al giro successivo.
 - **`ciPassRate` nullable** — un giorno senza run CI non è né 0% né 100%; `null` evita di falsare medie e grafici.
+- **Report con Claude Opus 5.5 (`ANTHROPIC_MODEL`) via SDK ufficiale `@anthropic-ai/sdk`** — modello più capace disponibile, effort `medium` di default (`REPORT_EFFORT`): un report settimanale è sintesi, non ragionamento lungo. Fallback lato server (`fallbacks: "default"`) se il modello declina per i suoi classificatori di sicurezza; un rifiuto residuo diventa `502 AI_REFUSED` e non salva nulla.
+- **Output strutturato (Zod) e Markdown costruito dal server** — il modello restituisce JSON validato (riepilogo, fatti salienti, tech debt, priorità) e il server lo impagina. Le tabelle delle metriche vengono dal DB, non dall'LLM, quindi i numeri non possono essere inventati. Alternativa scartata: Markdown libero dal modello, impossibile da validare e da esportare in modo stabile.
+- **Tech debt calcolato prima della chiamata** — issue ferme da 30+ giorni e PR da 7+ sono selezionate in codice e passate come dati; il modello le commenta e le ordina. I titoli di issue e PR sono testo di terzi: stanno in un blocco `<data>` e il prompt dice di trattarli come dati (difesa da prompt injection).
+- **Generazione sincrona nella richiesta** — una chiamata richiede secondi, non minuti; niente coda finché non arrivano i report programmati (Fase 6). Rate limit orario dedicato perché ogni report costa.
+- **PDF con PDFKit** — libreria JS pura, nessun browser headless (Puppeteer pesa centinaia di MB su Railway). Il PDF rende solo i costrutti del nostro Markdown; i caratteri fuori dalla codifica dei font standard (emoji, frecce) vengono sostituiti.
 - **`closedIssues` e `mergedPRs` sono conteggi giornalieri** — il seed della Fase 1 li trattava come cumulativi; ora seed e sync usano la stessa semantica, e i totali si ottengono sommando la serie.
 
 ## TODO
 
 - Email: crea un account [Resend](https://resend.com), verifica un dominio e imposta `RESEND_API_KEY` e `EMAIL_FROM`. Senza chiave il reset password non invia email.
 - OAuth GitHub (opzionale da spec): richiede una GitHub OAuth App (client id/secret) — non implementato; oggi si usa un personal access token.
+- Report AI: crea una chiave su [platform.claude.com](https://platform.claude.com) e imposta `ANTHROPIC_API_KEY`. La chiamata reale a Claude non è ancora stata provata end-to-end (in CI e nei test si usa un generatore finto e un `fetch` simulato).
 - Webhook GitHub per aggiornamenti real-time (opzionale da spec): richiede un URL pubblico, dopo il deploy.
 - `Repository.githubId` è `Int`: gli id GitHub sono oggi intorno a 1,4 miliardi, il limite è 2,1. Passare a `BigInt` prima che diventi un problema.
 - Paginazione GitHub limitata a 10 pagine da 100 elementi per chiamata: repository con oltre 1000 issue aperte avranno metriche parziali (segnalato nei log).

@@ -88,6 +88,10 @@ model Report {
   repositoryId String
   content      String
   summary      String
+  // Modello che ha prodotto il report e finestra temporale analizzata.
+  model        String?
+  periodStart  DateTime?
+  periodEnd    DateTime?
   generatedAt  DateTime   @default(now())
   repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
 
