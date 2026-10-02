@@ -5,7 +5,7 @@ import type { GitHubAccountService } from '../github/github-account.service.js';
 import type { RepoService } from '../repos.service.js';
 import { addDays } from '../sync/metrics.js';
 import { renderReportMarkdown } from './markdown.js';
-import type { ReportGenerator } from './report-generator.js';
+import type { ReportGeneratorResolver } from './report-generator.js';
 import {
   buildReportInput,
   referenceableUrls,
@@ -23,7 +23,14 @@ export interface ReportListFilters {
 
 export type ReportSummary = Pick<
   Report,
-  'id' | 'repositoryId' | 'summary' | 'generatedAt' | 'model' | 'periodStart' | 'periodEnd'
+  | 'id'
+  | 'repositoryId'
+  | 'summary'
+  | 'generatedAt'
+  | 'model'
+  | 'provider'
+  | 'periodStart'
+  | 'periodEnd'
 > & { repositoryName: string };
 
 export type ReportWithRepo = Report & { repositoryName: string };
@@ -36,11 +43,12 @@ export class ReportService {
     private readonly db: PrismaClient,
     private readonly repos: RepoService,
     private readonly github: GitHubAccountService,
-    private readonly generator: ReportGenerator | null,
+    private readonly generators: ReportGeneratorResolver,
   ) {}
 
   async generate(userId: string, repositoryId: string): Promise<ReportWithRepo> {
-    if (!this.generator) {
+    const generator = await this.generators.generatorFor(userId);
+    if (!generator) {
       throw new HttpError(503, 'AI report generation is not configured', 'AI_NOT_CONFIGURED');
     }
     const repo = await this.repos.get(userId, repositoryId);
@@ -62,7 +70,7 @@ export class ReportService {
         this.fetchLive(userId, repo.name, addDays(now, -REPORT_PERIOD_DAYS)),
       ]);
       const input = buildReportInput({ repository: repo, metrics, live, now });
-      const result = await this.generator.generate(input);
+      const result = await generator.generate(input);
       const content = renderReportMarkdown(input, result.draft, referenceableUrls(input));
 
       const report = await this.db.report.create({
@@ -72,6 +80,7 @@ export class ReportService {
           content,
           data: result.draft as unknown as Prisma.InputJsonValue,
           model: result.model,
+          provider: result.provider,
           periodStart: new Date(`${input.period.from}T00:00:00.000Z`),
           periodEnd: now,
           inputTokens: result.inputTokens,
@@ -114,6 +123,7 @@ export class ReportService {
           summary: true,
           generatedAt: true,
           model: true,
+          provider: true,
           periodStart: true,
           periodEnd: true,
           repository: { select: { name: true } },

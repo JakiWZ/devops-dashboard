@@ -3,14 +3,14 @@
 Dashboard full-stack che monitora repository GitHub e genera report intelligenti con AI.
 Progetto dimostrativo sviluppato interamente con Claude Code. Specifica completa in [`SPEC.md`](SPEC.md).
 
-> **Stato:** Fase 5 (frontend) — oltre ad auth (Fase 2), integrazione GitHub con metriche giornaliere (Fase 3) e report AI (Fase 4), la dashboard React: login/registrazione, overview con KPI e grafici, pagine repository e report, filtri per data/repository/stato, dark mode, test E2E con Playwright. Notifiche e deploy arrivano nelle fasi successive.
+> **Stato:** Fase 5 (frontend) più provider AI multipli (backend) — oltre ad auth (Fase 2), integrazione GitHub con metriche giornaliere (Fase 3) e report AI (Fase 4), la dashboard React: login/registrazione, overview con KPI e grafici, pagine repository e report, filtri per data/repository/stato, dark mode, test E2E con Playwright. Notifiche e deploy arrivano nelle fasi successive.
 
 ## Stack
 
 | Layer    | Tecnologia                                                                                     |
 | -------- | ---------------------------------------------------------------------------------------------- |
 | Frontend | React 19, TypeScript 5.9, Vite 8, Tailwind CSS 4, React Router 8, TanStack Query 5, Recharts 3 |
-| Backend  | Node.js 22, Express 5, TypeScript 5.9, Zod 4, Pino 10                                          |
+| Backend  | Node.js 22, Express 5, TypeScript 5.9, Zod 4, Pino 10, Vercel AI SDK 7                         |
 | Database | PostgreSQL 16, Prisma 6                                                                        |
 | Test     | Jest 30 + Supertest (backend), Vitest (frontend, unit), Playwright (E2E)                       |
 | CI       | GitHub Actions                                                                                 |
@@ -53,14 +53,14 @@ npx playwright install chromium   # una volta
 npm run test:e2e                  # avvia backend (:4000) e Vite (:5173) se non sono già attivi
 ```
 
-La generazione AI nel test E2E è intercettata (serve `ANTHROPIC_API_KEY`); login, navigazione ed export usano il backend vero.
+La generazione AI nel test E2E è intercettata (serve una chiave AI); login, navigazione ed export usano il backend vero.
 I test backend sono di integrazione e **svuotano** il database indicato in `TEST_DATABASE_URL`: usa un DB dedicato.
 
 Utenti demo creati dal seed (solo per sviluppo): `demo@example.com` (ADMIN) e `user@example.com` (USER), password `demo-password`.
 
 ### Collegare GitHub
 
-1. Imposta `GITHUB_TOKEN_ENC_KEY` nel `.env` (comando di generazione in `.env.example`). Senza chiave le route GitHub rispondono `503`.
+1. Imposta `SECRETS_ENC_KEY` nel `.env` (comando di generazione in `.env.example`; il vecchio nome `GITHUB_TOKEN_ENC_KEY` è ancora accettato). Senza chiave le route GitHub rispondono `503`.
 2. Crea un [fine-grained personal access token](https://github.com/settings/personal-access-tokens/new) con accesso in sola lettura a **Metadata**, **Issues**, **Pull requests** e **Actions** sui repository da monitorare.
 3. Dopo il login: `PUT /api/github/token` con `{ "token": "github_pat_..." }`, poi `POST /api/repos` con `{ "fullName": "owner/nome" }` e `POST /api/repos/:id/sync`.
 
@@ -68,7 +68,12 @@ Il sync automatico gira nel processo dell'API ogni `SYNC_INTERVAL_MINUTES` (defa
 
 ### Report AI
 
-1. Imposta `ANTHROPIC_API_KEY` nel `.env` (chiave da [platform.claude.com](https://platform.claude.com)). Senza chiave `POST /api/reports` risponde `503 AI_NOT_CONFIGURED`; storico ed export funzionano comunque (il seed crea un report demo per repository).
+1. Scegli il provider AI. Due strade, combinabili:
+   - **Default del server**: `AI_PROVIDER` (id del catalogo [models.dev](https://models.dev), es. `anthropic`, `openai`, `google`, `deepseek`, `zai-coding-plan`), `AI_MODEL` e `AI_API_KEY` nel `.env`. Le variabili `ANTHROPIC_API_KEY`/`ANTHROPIC_MODEL` della Fase 4 restano valide con `AI_PROVIDER=anthropic`.
+   - **Chiave per utente** (richiede `SECRETS_ENC_KEY`): `GET /api/ai/providers` per la lista, `POST /api/ai/verify { provider, apiKey }` per verificare la chiave e ottenere i modelli, `PUT /api/ai/credential { provider, apiKey, model }` per salvarla. Chi ha una sua chiave usa quella, gli altri il default del server.
+
+   Senza nessuna chiave `POST /api/reports` risponde `503 AI_NOT_CONFIGURED`; storico ed export funzionano comunque (il seed crea un report demo per repository).
+
 2. `POST /api/reports` con `{ "repositoryId": "..." }`: la risposta arriva in 30-90 secondi.
 
 Come nasce un report:
@@ -84,7 +89,7 @@ flowchart LR
   G --> H[Export .md / .pdf]
 ```
 
-Variabili: `ANTHROPIC_MODEL` (default `claude-opus-5-5`), `REPORT_EFFORT` (default `high`), `REPORT_FALLBACKS` (default `true`), `REPORT_LANGUAGE` (default `English`), `REPORT_RATE_LIMIT` (generazioni per IP all'ora, default 10).
+Variabili: `AI_PROVIDER` (default `anthropic`), `AI_MODEL` (default `claude-opus-5-5` per Anthropic, obbligatoria per gli altri), `AI_API_KEY`, `REPORT_EFFORT` e `REPORT_FALLBACKS` (solo Anthropic, default `high` e `true`), `REPORT_LANGUAGE` (default `English`), `REPORT_RATE_LIMIT` (generazioni per IP all'ora, default 10), `AI_KEY_CHECK_RATE_LIMIT` (verifiche di chiavi per IP ogni 15 minuti, default 20).
 
 ## API
 
@@ -137,7 +142,7 @@ Metriche giornaliere (UTC): `openIssues` e `openPRs` sono lo stato a fine giorna
 - **Test di integrazione su Postgres reale (`TEST_DATABASE_URL`)** — i flussi di auth dipendono da vincoli e transazioni del DB; un mock di Prisma avrebbe testato il mock. In CI il DB è un service container.
 - **Email via interfaccia `EmailSender`** — Resend in produzione, sender finto nei test; senza `RESEND_API_KEY` non si invia nulla (in development il link finisce nei log).
 - **`trust proxy` attivo in produzione** — dietro il proxy di Railway serve per far vedere al rate limiter l'IP reale del client.
-- **Personal access token per utente invece di OAuth GitHub** — funziona senza registrare una OAuth App; il token è verificato su GitHub e salvato cifrato con AES-256-GCM (`GITHUB_TOKEN_ENC_KEY`), mai in chiaro. OAuth resta l'evoluzione naturale (vedi TODO).
+- **Personal access token per utente invece di OAuth GitHub** — funziona senza registrare una OAuth App; il token è verificato su GitHub e salvato cifrato con AES-256-GCM (`SECRETS_ENC_KEY`), mai in chiaro. OAuth resta l'evoluzione naturale (vedi TODO).
 - **REST v3 con Octokit invece di GraphQL v4** — endpoint semplici da simulare nei test e paginazione già gestita; GraphQL ridurrebbe le chiamate ma complica cache ETag e mock. Il client è dietro l'interfaccia `GitHubClient`, quindi sostituibile.
 - **Endpoint issues invece della Search API** — la Search API ha un limite separato di 30 richieste al minuto; le issue aperte più quelle chiuse dall'inizio della finestra bastano a ricostruire lo stato giorno per giorno.
 - **Cache ETag in-memory (`lru-cache`) invece di Redis** — con richieste condizionali GitHub risponde `304`, che per le richieste autenticate non consuma il rate limit primario. Un'istanza sola non giustifica Redis; le chiavi includono l'hash del token, quindi utenti diversi non condividono risposte.
@@ -161,6 +166,11 @@ Metriche giornaliere (UTC): `openIssues` e `openPRs` sono lo stato a fine giorna
 - **Palette dei grafici validata per daltonismo, colori in variabili CSS** — slot 1-2 della palette categoriale di riferimento (blu/arancio), controllati con un validatore CVD/contrasto per tema chiaro e scuro; le variabili cambiano con la classe `.dark` senza re-render.
 - **Pass rate CI aggregato come media semplice dei repository con run** — il backend non espone il numero di run giornaliere, quindi non si può pesare; i giorni senza run restano vuoti invece di valere 0%.
 - **E2E contro backend e Postgres veri, solo la POST di generazione intercettata** — login, refresh, filtri ed export passano dal codice reale; la chiamata a Claude richiede una chiave e costa. Alternativa scartata: mock di tutte le API, che non avrebbe verificato l'integrazione.
+- **Provider AI dal catalogo models.dev invece di una lista fissa** — è il database open source usato da OpenCode: oltre 200 provider con URL dell'API, pacchetto SDK e modelli (capacità, contesto, costi). Il backend lo aggiorna una volta al giorno e, se il servizio non risponde, usa lo snapshot del pacchetto `@opencode-ai/models`. Alternativa scartata: mantenere a mano una lista di provider e modelli, che invecchia in poche settimane.
+- **Vercel AI SDK per tutti i provider tranne Anthropic** — un'unica chiamata con output strutturato (schema Zod del report) per i provider compatibili OpenAI e per OpenAI, Google, Mistral, Groq, xAI. Per Anthropic resta l'adapter della Fase 4 con l'SDK ufficiale, perché usa effort e fallback server-side che AI SDK non espone. Provider con SDK diversi (Bedrock, Vertex…) compaiono come "non supportati". Alternativa scartata: un client HTTP scritto a mano per ogni famiglia di API.
+- **Verifica della chiave prima di salvarla** — si chiama l'elenco modelli del provider (gratis); se l'endpoint non esiste si fa una richiesta da 1 token al modello più economico. Una chiave che non passa non viene salvata, e i modelli mostrati sono quelli che la chiave può davvero usare quando il provider li elenca.
+- **Un solo modulo `services/ai`** — è l'unico che importa SDK di provider; report e future funzioni AI chiedono il generatore per l'utente (`generatorFor`), che usa la sua chiave o il default del server. Così la scelta di provider e modello vale ovunque.
+- **Credenziali fuori dai log** — Pino oscura header `Authorization`, cookie, `Set-Cookie` e campi `apiKey`.
 - **`closedIssues` e `mergedPRs` sono conteggi giornalieri** — il seed della Fase 1 li trattava come cumulativi; ora seed e sync usano la stessa semantica, e i totali si ottengono sommando la serie.
 
 ## TODO
@@ -171,9 +181,10 @@ Metriche giornaliere (UTC): `openIssues` e `openPRs` sono lo stato a fine giorna
 - `Repository.githubId` è `Int`: gli id GitHub sono oggi intorno a 1,4 miliardi, il limite è 2,1. Passare a `BigInt` prima che diventi un problema.
 - Paginazione GitHub limitata a 10 pagine da 100 elementi per chiamata: repository con oltre 1000 issue aperte avranno metriche parziali (segnalato nei log).
 - Pulizia periodica dei refresh/reset token scaduti (job schedulato).
-- Report AI: crea una chiave API su [platform.claude.com](https://platform.claude.com) e imposta `ANTHROPIC_API_KEY`. La chiamata reale a Claude non è stata provata in sviluppo (nessuna chiave disponibile): i test esercitano l'SDK con risposte HTTP simulate.
+- Report AI: crea una chiave presso il provider scelto e imposta `AI_PROVIDER`, `AI_MODEL` e `AI_API_KEY` (o inseriscila dalla dashboard). Nessuna chiamata reale a un provider è stata provata in sviluppo (nessuna chiave disponibile, e dal container di sviluppo models.dev non è raggiungibile): i test esercitano gli SDK con risposte HTTP simulate e il catalogo con lo snapshot.
 - PDF: embeddare un font Unicode (es. Noto Sans) per titoli con caratteri non latini.
 - Generazione report in background (coda + polling) quando arriveranno i report schedulati della Fase 6.
+- Frontend: pagina Impostazioni → AI (scelta provider, verifica chiave, scelta modello) sopra le API `/api/ai`.
 - Frontend: pagine "password dimenticata" e "reset password" (il backend le supporta, il link email punta a `/reset-password`) e collegamento GitHub via OAuth quando ci sarà la OAuth App.
 
 - Deploy (Fase 7): richiede account Railway (backend + Postgres) e Vercel (frontend) — da configurare dal maintainer.

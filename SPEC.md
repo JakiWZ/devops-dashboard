@@ -12,7 +12,7 @@ Progetto dimostrativo da senior engineer, sviluppato interamente con Claude Code
 | Database | PostgreSQL (Supabase o Railway) |
 | ORM | Prisma |
 | Auth | JWT + bcrypt |
-| AI | Claude API |
+| AI | Qualunque provider del catalogo models.dev via Vercel AI SDK (chiave del server come default, chiave per utente opzionale) |
 | Email | Resend |
 | Telegram | node-telegram-bot-api |
 | Deploy | Vercel (frontend), Railway (backend) |
@@ -41,6 +41,12 @@ Progetto dimostrativo da senior engineer, sviluppato interamente con Claude Code
   - Suggerimenti prioritari
 - Report salvati nel DB con storico
 - Export PDF/Markdown
+
+### 3b. Provider AI multipli (vale per ogni funzione AI del progetto)
+- Un solo modulo AI nel backend: ogni funzione AI (report, report schedulati, riassunti nelle notifiche, funzioni future) passa da lì; nessun altro file usa direttamente l'SDK di un provider
+- Catalogo di provider e modelli da models.dev (lo stesso di OpenCode), con copia locale di riserva
+- Chiave del server come default (`AI_PROVIDER`, `AI_MODEL`, `AI_API_KEY`)
+- Chiave per utente opzionale: scelgo il provider dalla lista, incollo la chiave, la dashboard la verifica; se funziona scelgo il modello tra quelli del provider, altrimenti la reinserisco o torno indietro. Chiave cifrata nel DB, mai restituita al client
 
 ### 4. Dashboard frontend (React + TypeScript)
 - Homepage con overview (metriche chiave)
@@ -119,7 +125,7 @@ Progetto dimostrativo da senior engineer, sviluppato interamente con Claude Code
 1. **Base:** monorepo, TS strict, lint, schema Prisma, health check, CI
 2. **Auth:** JWT, refresh, ruoli, reset password, test
 3. **GitHub e metriche:** integrazione API, cache, sync, seed demo
-4. **Report AI:** Claude API, storico, export
+4. **Report AI:** provider AI a scelta (vedi 3b), storico, export
 5. **Frontend:** dashboard, grafici, filtri, dark mode, test Playwright
 6. **Notifiche:** Telegram, email, preferenze
 7. **Deploy e README**

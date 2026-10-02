@@ -20,10 +20,13 @@ import { GitHubAccountService } from './services/github/github-account.service.j
 import type { GitHubClientFactory } from './services/github/github.types.js';
 import { createOctokitClientFactory } from './services/github/octokit.client.js';
 import { prismaProbe, type DatabaseProbe } from './services/health.service.js';
-import {
-  createReportGenerator,
-  type ReportGenerator,
+import type {
+  ReportGenerator,
+  ReportGeneratorResolver,
 } from './services/reports/report-generator.js';
+import { AiCatalog } from './services/ai/catalog.js';
+import { AiSettingsService } from './services/ai/ai-settings.service.js';
+import { aiRouter } from './routes/ai.routes.js';
 import { ReportService } from './services/reports/report.service.js';
 import { RepoService } from './services/repos.service.js';
 import { RepoSyncService } from './services/sync/sync.service.js';
@@ -34,8 +37,11 @@ export interface AppDeps {
   db?: PrismaClient;
   emailSender?: EmailSender;
   githubClientFactory?: GitHubClientFactory;
-  /** null disattiva la generazione (503); undefined usa Claude se ANTHROPIC_API_KEY è impostata. */
+  /** Nei test: generatore fisso per tutti (null disattiva la generazione, 503). */
   reportGenerator?: ReportGenerator | null;
+  /** Nei test: catalogo e fetch finti per i provider AI. */
+  aiCatalog?: AiCatalog;
+  aiFetch?: typeof globalThis.fetch;
 }
 
 export interface GitHubServices {
@@ -48,7 +54,7 @@ export function createGitHubServices(
   db: PrismaClient,
   clientFactory: GitHubClientFactory = createOctokitClientFactory(),
 ): GitHubServices {
-  const secretBox = env.GITHUB_TOKEN_ENC_KEY ? new SecretBox(env.GITHUB_TOKEN_ENC_KEY) : null;
+  const secretBox = env.secretsKey ? new SecretBox(env.secretsKey) : null;
   const accounts = new GitHubAccountService(db, clientFactory, secretBox);
   return {
     accounts,
@@ -62,12 +68,31 @@ export function createApp({
   db = prisma,
   emailSender = createEmailSender(),
   githubClientFactory,
-  reportGenerator = createReportGenerator(),
+  reportGenerator,
+  aiCatalog = new AiCatalog(),
+  aiFetch,
 }: AppDeps = {}): Express {
   const app = express();
   const authService = new AuthService(db, emailSender);
   const github = createGitHubServices(db, githubClientFactory);
-  const reportService = new ReportService(db, github.repos, github.accounts, reportGenerator);
+  const secretBox = env.secretsKey ? new SecretBox(env.secretsKey) : null;
+  const aiSettings = new AiSettingsService(
+    db,
+    aiCatalog,
+    secretBox,
+    env.aiDefault,
+    {
+      language: env.REPORT_LANGUAGE,
+      claudeEffort: env.REPORT_EFFORT,
+      claudeFallbacks: env.REPORT_FALLBACKS,
+    },
+    aiFetch,
+  );
+  const generators: ReportGeneratorResolver =
+    reportGenerator === undefined
+      ? aiSettings
+      : { generatorFor: () => Promise.resolve(reportGenerator) };
+  const reportService = new ReportService(db, github.repos, github.accounts, generators);
 
   app.disable('x-powered-by');
   // In produzione siamo dietro il proxy di Railway: senza questo il rate limit vedrebbe un solo IP.
@@ -93,6 +118,7 @@ export function createApp({
   app.use('/api/github', githubRouter(github.accounts));
   app.use('/api/repos', reposRouter(github.repos, github.sync));
   app.use('/api/reports', reportsRouter(reportService));
+  app.use('/api/ai', aiRouter(aiSettings));
 
   app.use(notFoundHandler);
   app.use(errorHandler);

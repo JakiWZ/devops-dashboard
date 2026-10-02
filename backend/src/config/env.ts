@@ -1,6 +1,21 @@
 import 'dotenv/config';
 import { z } from 'zod';
 
+const optionalString = z.preprocess(
+  (value) => (value === '' ? undefined : value),
+  z.string().min(1).optional(),
+);
+
+const encryptionKey = z.preprocess(
+  (value) => (value === '' ? undefined : value),
+  z
+    .string()
+    .refine((value) => Buffer.from(value, 'base64').length === 32, 'must be 32 bytes in base64')
+    .optional(),
+);
+
+const DEFAULT_ANTHROPIC_MODEL = 'claude-opus-5-5';
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(4000),
@@ -25,23 +40,23 @@ const envSchema = z.object({
   APP_URL: z.string().url().default('http://localhost:5173'),
   RESEND_API_KEY: z.string().min(1).optional(),
   EMAIL_FROM: z.string().min(1).default('DevOps Dashboard <onboarding@resend.dev>'),
-  // Chiave AES-256 (32 byte in base64) per cifrare i token GitHub. Senza chiave l'integrazione è disattivata.
-  GITHUB_TOKEN_ENC_KEY: z.preprocess(
-    (value) => (value === '' ? undefined : value),
-    z
-      .string()
-      .refine((value) => Buffer.from(value, 'base64').length === 32, 'must be 32 bytes in base64')
-      .optional(),
-  ),
+  // Chiave AES-256 (32 byte in base64) per cifrare i segreti degli utenti (token GitHub, chiavi AI).
+  // Senza chiave integrazione GitHub e chiavi AI per utente sono disattivate.
+  SECRETS_ENC_KEY: encryptionKey,
+  // Nome storico di SECRETS_ENC_KEY, ancora accettato.
+  GITHUB_TOKEN_ENC_KEY: encryptionKey,
   // Intervallo del sync automatico dei repository; 0 lo disattiva.
   SYNC_INTERVAL_MINUTES: z.coerce.number().int().min(0).default(360),
   SYNC_RATE_LIMIT: z.coerce.number().int().positive().default(10),
-  // Senza chiave la generazione dei report risponde 503; il resto dell'app funziona.
-  ANTHROPIC_API_KEY: z.preprocess(
-    (value) => (value === '' ? undefined : value),
-    z.string().min(1).optional(),
-  ),
-  ANTHROPIC_MODEL: z.string().min(1).default('claude-opus-5-5'),
+  // Default AI del server, usato da chi non ha inserito una propria chiave. Il provider è un id
+  // del catalogo models.dev (es. anthropic, openai, deepseek, zai-coding-plan).
+  AI_PROVIDER: z.string().min(1).default('anthropic'),
+  AI_MODEL: optionalString,
+  // Senza chiave (né del server né dell'utente) la generazione dei report risponde 503.
+  AI_API_KEY: optionalString,
+  // Nomi della Fase 4, ancora accettati quando AI_PROVIDER è anthropic.
+  ANTHROPIC_API_KEY: optionalString,
+  ANTHROPIC_MODEL: optionalString,
   REPORT_EFFORT: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).default('high'),
   // Fallback server-side su un altro modello quando i classificatori di sicurezza rifiutano.
   REPORT_FALLBACKS: z
@@ -51,9 +66,29 @@ const envSchema = z.object({
   REPORT_LANGUAGE: z.string().min(1).default('English'),
   // Generazioni per IP ogni ora: ogni report costa una chiamata al modello.
   REPORT_RATE_LIMIT: z.coerce.number().int().positive().default(10),
+  // Verifiche di chiavi AI per IP ogni 15 minuti.
+  AI_KEY_CHECK_RATE_LIMIT: z.coerce.number().int().positive().default(20),
 });
 
-export type Env = z.infer<typeof envSchema>;
+export type RawEnv = z.infer<typeof envSchema>;
+
+export type Env = RawEnv & {
+  /** Chiave di cifratura effettiva (SECRETS_ENC_KEY o, in mancanza, GITHUB_TOKEN_ENC_KEY). */
+  secretsKey: string | undefined;
+  /** Default AI del server già risolto, o null se manca la chiave. */
+  aiDefault: { provider: string; model: string; apiKey: string } | null;
+};
+
+function resolveAiDefault(raw: RawEnv): Env['aiDefault'] {
+  const anthropic = raw.AI_PROVIDER === 'anthropic';
+  const apiKey = raw.AI_API_KEY ?? (anthropic ? raw.ANTHROPIC_API_KEY : undefined);
+  const model =
+    raw.AI_MODEL ?? (anthropic ? (raw.ANTHROPIC_MODEL ?? DEFAULT_ANTHROPIC_MODEL) : undefined);
+  if (!apiKey) return null;
+  if (!model)
+    throw new Error('Invalid environment variables: AI_MODEL is required with AI_PROVIDER');
+  return { provider: raw.AI_PROVIDER, model, apiKey };
+}
 
 export function parseEnv(source: NodeJS.ProcessEnv): Env {
   const result = envSchema.safeParse(source);
@@ -63,7 +98,11 @@ export function parseEnv(source: NodeJS.ProcessEnv): Env {
       .join('; ');
     throw new Error(`Invalid environment variables: ${issues}`);
   }
-  return result.data;
+  return {
+    ...result.data,
+    secretsKey: result.data.SECRETS_ENC_KEY ?? result.data.GITHUB_TOKEN_ENC_KEY,
+    aiDefault: resolveAiDefault(result.data),
+  };
 }
 
 export const env = parseEnv(process.env);
