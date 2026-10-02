@@ -27,6 +27,9 @@ jobs:
     env:
       # Credenziali usa-e-getta del solo container CI, non un segreto.
       DATABASE_URL: postgresql://ci:ci@localhost:5432/devops_dashboard?schema=public
+      TEST_DATABASE_URL: postgresql://ci:ci@localhost:5432/devops_dashboard_test?schema=public
+      # Segreto fittizio valido solo per i test in CI.
+      JWT_ACCESS_SECRET: ci-only-secret-ci-only-secret-ci-only-secret
       NODE_ENV: test
     steps:
       - uses: actions/checkout@v4
@@ -39,6 +42,10 @@ jobs:
       - run: npx prisma generate
       - run: npx prisma migrate deploy
       - run: npm run db:seed
+      - name: Prepare test database
+        run: |
+          PGPASSWORD=ci psql -h localhost -U ci -d postgres -c 'CREATE DATABASE devops_dashboard_test'
+          DATABASE_URL=$TEST_DATABASE_URL npx prisma migrate deploy
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test

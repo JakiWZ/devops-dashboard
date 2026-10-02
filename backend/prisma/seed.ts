@@ -1,10 +1,11 @@
 import { PrismaClient, Role } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 const DAYS = 30;
 
-// Hash placeholder non utilizzabile per il login: l'hashing reale arriva in Fase 2 (auth).
-const DEMO_PASSWORD_HASH = 'seed-placeholder-not-a-valid-hash';
+// Credenziali solo per l'ambiente demo, documentate nel README. Mai usare il seed in produzione.
+const DEMO_PASSWORD = 'demo-password';
 
 function startOfDayUtc(daysAgo: number): Date {
   const d = new Date();
@@ -14,10 +15,16 @@ function startOfDayUtc(daysAgo: number): Date {
 }
 
 async function main(): Promise<void> {
+  const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 12);
   const user = await prisma.user.upsert({
     where: { email: 'demo@example.com' },
-    update: {},
-    create: { email: 'demo@example.com', passwordHash: DEMO_PASSWORD_HASH, role: Role.ADMIN },
+    update: { passwordHash, role: Role.ADMIN },
+    create: { email: 'demo@example.com', passwordHash, role: Role.ADMIN },
+  });
+  await prisma.user.upsert({
+    where: { email: 'user@example.com' },
+    update: { passwordHash, role: Role.USER },
+    create: { email: 'user@example.com', passwordHash, role: Role.USER },
   });
 
   const repos = [
@@ -61,7 +68,9 @@ async function main(): Promise<void> {
     }
   }
 
-  console.log(`Seed completed: 1 user, ${repos.length} repositories, ${DAYS} days of metrics each`);
+  console.log(
+    `Seed completed: 2 users (admin + user), ${repos.length} repositories, ${DAYS} days of metrics each`,
+  );
 }
 
 main()
