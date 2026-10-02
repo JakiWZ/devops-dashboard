@@ -3,7 +3,13 @@ import request from 'supertest';
 import { createApp } from '../app.js';
 import { HttpError } from '../lib/http-error.js';
 import { prisma } from '../lib/prisma.js';
-import { FakeEmailSender, FakeGitHubClient, resetDatabase } from '../test/helpers.js';
+import {
+  FakeEmailSender,
+  FakeGitHubClient,
+  issueFixture,
+  resetDatabase,
+  runFixture,
+} from '../test/helpers.js';
 
 const VALID_TOKEN = 'ghp_valid';
 const webRepo = {
@@ -157,11 +163,13 @@ describe('sync', () => {
     const id = await trackRepo(token);
     const now = new Date();
     const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    github.open = [{ isPullRequest: false, createdAt: yesterday, closedAt: null, mergedAt: null }];
-    github.closed = [{ isPullRequest: true, createdAt: yesterday, closedAt: now, mergedAt: now }];
+    github.open = [issueFixture({ createdAt: yesterday })];
+    github.closed = [
+      issueFixture({ isPullRequest: true, createdAt: yesterday, closedAt: now, mergedAt: now }),
+    ];
     github.runs = [
-      { createdAt: now, conclusion: 'success' },
-      { createdAt: now, conclusion: 'failure' },
+      runFixture({ createdAt: now, conclusion: 'success' }),
+      runFixture({ createdAt: now, conclusion: 'failure' }),
     ];
 
     const auth = { Authorization: `Bearer ${token}` };

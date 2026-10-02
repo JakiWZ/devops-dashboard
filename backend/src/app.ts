@@ -11,6 +11,7 @@ import { prisma } from './lib/prisma.js';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
 import { authRouter } from './routes/auth.routes.js';
 import { healthRouter } from './routes/health.routes.js';
+import { reportsRouter } from './routes/reports.routes.js';
 import { githubRouter, reposRouter } from './routes/repos.routes.js';
 import { usersRouter } from './routes/users.routes.js';
 import { AuthService } from './services/auth.service.js';
@@ -19,6 +20,11 @@ import { GitHubAccountService } from './services/github/github-account.service.j
 import type { GitHubClientFactory } from './services/github/github.types.js';
 import { createOctokitClientFactory } from './services/github/octokit.client.js';
 import { prismaProbe, type DatabaseProbe } from './services/health.service.js';
+import {
+  createReportGenerator,
+  type ReportGenerator,
+} from './services/reports/report-generator.js';
+import { ReportService } from './services/reports/report.service.js';
 import { RepoService } from './services/repos.service.js';
 import { RepoSyncService } from './services/sync/sync.service.js';
 import { SecretBox } from './lib/secret-box.js';
@@ -28,6 +34,8 @@ export interface AppDeps {
   db?: PrismaClient;
   emailSender?: EmailSender;
   githubClientFactory?: GitHubClientFactory;
+  /** null disattiva la generazione (503); undefined usa Claude se ANTHROPIC_API_KEY è impostata. */
+  reportGenerator?: ReportGenerator | null;
 }
 
 export interface GitHubServices {
@@ -54,10 +62,12 @@ export function createApp({
   db = prisma,
   emailSender = createEmailSender(),
   githubClientFactory,
+  reportGenerator = createReportGenerator(),
 }: AppDeps = {}): Express {
   const app = express();
   const authService = new AuthService(db, emailSender);
   const github = createGitHubServices(db, githubClientFactory);
+  const reportService = new ReportService(db, github.repos, github.accounts, reportGenerator);
 
   app.disable('x-powered-by');
   // In produzione siamo dietro il proxy di Railway: senza questo il rate limit vedrebbe un solo IP.
@@ -82,6 +92,7 @@ export function createApp({
   app.use('/api/users', usersRouter(db));
   app.use('/api/github', githubRouter(github.accounts));
   app.use('/api/repos', reposRouter(github.repos, github.sync));
+  app.use('/api/reports', reportsRouter(reportService));
 
   app.use(notFoundHandler);
   app.use(errorHandler);

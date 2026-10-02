@@ -69,3 +69,29 @@ export class FakeGitHubClient implements GitHubClient {
     return this.runs;
   }
 }
+
+export function issueFixture(overrides: Partial<GitHubIssue> = {}): GitHubIssue {
+  const createdAt = overrides.createdAt ?? new Date();
+  return {
+    number: 1,
+    title: 'Sample issue',
+    url: 'https://github.com/acme/web-app/issues/1',
+    isPullRequest: false,
+    isDraft: false,
+    createdAt,
+    updatedAt: createdAt,
+    closedAt: null,
+    mergedAt: null,
+    ...overrides,
+  };
+}
+
+export function runFixture(overrides: Partial<GitHubWorkflowRun> = {}): GitHubWorkflowRun {
+  return {
+    name: 'CI',
+    url: 'https://github.com/acme/web-app/actions/runs/1',
+    createdAt: new Date(),
+    conclusion: 'success',
+    ...overrides,
+  };
+}

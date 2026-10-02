@@ -3,7 +3,7 @@
 Dashboard full-stack che monitora repository GitHub e genera report intelligenti con AI.
 Progetto dimostrativo sviluppato interamente con Claude Code. Specifica completa in [`SPEC.md`](SPEC.md).
 
-> **Stato:** Fase 3 (GitHub e metriche) — oltre all'auth della Fase 2, collegamento a GitHub con personal access token, repository tracciati, sync di issue/PR/CI in metriche giornaliere, cache ETag e sync automatico. Report AI, frontend completo e notifiche arrivano nelle fasi successive.
+> **Stato:** Fase 4 (report AI) — oltre ad auth (Fase 2) e integrazione GitHub con metriche giornaliere (Fase 3), generazione di report settimanali con Claude (riassunto, tech debt, priorità), storico ed export Markdown/PDF. Frontend completo e notifiche arrivano nelle fasi successive.
 
 ## Stack
 
@@ -56,31 +56,56 @@ Utenti demo creati dal seed (solo per sviluppo): `demo@example.com` (ADMIN) e `u
 
 Il sync automatico gira nel processo dell'API ogni `SYNC_INTERVAL_MINUTES` (default 360, `0` lo disattiva).
 
+### Report AI
+
+1. Imposta `ANTHROPIC_API_KEY` nel `.env` (chiave da [platform.claude.com](https://platform.claude.com)). Senza chiave `POST /api/reports` risponde `503 AI_NOT_CONFIGURED`; storico ed export funzionano comunque (il seed crea un report demo per repository).
+2. `POST /api/reports` con `{ "repositoryId": "..." }`: la risposta arriva in 30-90 secondi.
+
+Come nasce un report:
+
+```mermaid
+flowchart LR
+  A[Metriche DB<br/>ultimi 14 giorni] --> C[buildReportInput<br/>numeri calcolati nel codice]
+  B[GitHub live<br/>issue, PR, run CI] -.se collegato.-> C
+  C --> D[Claude<br/>structured output JSON]
+  D --> E[Validazione Zod]
+  E --> F[renderReportMarkdown<br/>escape + link filtrati]
+  F --> G[(Report: content + data)]
+  G --> H[Export .md / .pdf]
+```
+
+Variabili: `ANTHROPIC_MODEL` (default `claude-opus-5-5`), `REPORT_EFFORT` (default `high`), `REPORT_FALLBACKS` (default `true`), `REPORT_LANGUAGE` (default `English`), `REPORT_RATE_LIMIT` (generazioni per IP all'ora, default 10).
+
 ## API
 
-| Metodo | Path                        | Descrizione                                                                  |
-| ------ | --------------------------- | ---------------------------------------------------------------------------- |
-| GET    | `/api/health`               | Stato API e database. `200` se il DB risponde, `503` (`degraded`) altrimenti |
-| POST   | `/api/auth/register`        | `{ email, password }` → `201 { user, accessToken }` + cookie refresh         |
-| POST   | `/api/auth/login`           | `{ email, password }` → `200 { user, accessToken }` + cookie refresh         |
-| POST   | `/api/auth/refresh`         | Usa il cookie `refresh_token`, lo ruota e restituisce un nuovo access token  |
-| POST   | `/api/auth/logout`          | Revoca la sessione (family del refresh token) e cancella il cookie           |
-| GET    | `/api/auth/me`              | Utente corrente (`Authorization: Bearer <accessToken>`)                      |
-| POST   | `/api/auth/forgot-password` | `{ email }` → sempre `202`, invia il link se l'utente esiste                 |
-| POST   | `/api/auth/reset-password`  | `{ token, password }` → `204`, revoca tutte le sessioni                      |
-| GET    | `/api/users`                | Lista utenti, solo ruolo `ADMIN`                                             |
-| GET    | `/api/github`               | Stato del collegamento GitHub `{ configured, connected, login }`             |
-| PUT    | `/api/github/token`         | `{ token }`: verifica il PAT su GitHub e lo salva cifrato                    |
-| DELETE | `/api/github/token`         | Scollega GitHub (`204`)                                                      |
-| GET    | `/api/repos`                | Repository tracciati, con l'ultima metrica                                   |
-| GET    | `/api/repos/available`      | Repository GitHub dell'utente non ancora tracciati                           |
-| POST   | `/api/repos`                | `{ fullName: "owner/nome" }` → `201`, `409` se già tracciato                 |
-| GET    | `/api/repos/:id`            | Dettaglio con stato del sync e ultima metrica                                |
-| DELETE | `/api/repos/:id`            | Smette di tracciare il repository (`204`)                                    |
-| GET    | `/api/repos/:id/metrics`    | `?from=YYYY-MM-DD&to=YYYY-MM-DD` (default ultimi 30 giorni, max 366)         |
-| POST   | `/api/repos/:id/sync`       | Sync manuale, `409` se già in corso; rate limit `SYNC_RATE_LIMIT`            |
+| Metodo | Path                        | Descrizione                                                                               |
+| ------ | --------------------------- | ----------------------------------------------------------------------------------------- |
+| GET    | `/api/health`               | Stato API e database. `200` se il DB risponde, `503` (`degraded`) altrimenti              |
+| POST   | `/api/auth/register`        | `{ email, password }` → `201 { user, accessToken }` + cookie refresh                      |
+| POST   | `/api/auth/login`           | `{ email, password }` → `200 { user, accessToken }` + cookie refresh                      |
+| POST   | `/api/auth/refresh`         | Usa il cookie `refresh_token`, lo ruota e restituisce un nuovo access token               |
+| POST   | `/api/auth/logout`          | Revoca la sessione (family del refresh token) e cancella il cookie                        |
+| GET    | `/api/auth/me`              | Utente corrente (`Authorization: Bearer <accessToken>`)                                   |
+| POST   | `/api/auth/forgot-password` | `{ email }` → sempre `202`, invia il link se l'utente esiste                              |
+| POST   | `/api/auth/reset-password`  | `{ token, password }` → `204`, revoca tutte le sessioni                                   |
+| GET    | `/api/users`                | Lista utenti, solo ruolo `ADMIN`                                                          |
+| GET    | `/api/github`               | Stato del collegamento GitHub `{ configured, connected, login }`                          |
+| PUT    | `/api/github/token`         | `{ token }`: verifica il PAT su GitHub e lo salva cifrato                                 |
+| DELETE | `/api/github/token`         | Scollega GitHub (`204`)                                                                   |
+| GET    | `/api/repos`                | Repository tracciati, con l'ultima metrica                                                |
+| GET    | `/api/repos/available`      | Repository GitHub dell'utente non ancora tracciati                                        |
+| POST   | `/api/repos`                | `{ fullName: "owner/nome" }` → `201`, `409` se già tracciato                              |
+| GET    | `/api/repos/:id`            | Dettaglio con stato del sync e ultima metrica                                             |
+| DELETE | `/api/repos/:id`            | Smette di tracciare il repository (`204`)                                                 |
+| GET    | `/api/repos/:id/metrics`    | `?from=YYYY-MM-DD&to=YYYY-MM-DD` (default ultimi 30 giorni, max 366)                      |
+| POST   | `/api/repos/:id/sync`       | Sync manuale, `409` se già in corso; rate limit `SYNC_RATE_LIMIT`                         |
+| GET    | `/api/reports`              | Storico: `?repositoryId&from&to&limit&offset` → `{ reports, total }` (senza `content`)    |
+| POST   | `/api/reports`              | `{ repositoryId }` → `201 { report }`; `409` se già in generazione, `503` senza chiave AI |
+| GET    | `/api/reports/:id`          | Report completo: `content` (Markdown) e `data` (JSON strutturato)                         |
+| GET    | `/api/reports/:id/export`   | `?format=markdown\|pdf` → file allegato                                                   |
+| DELETE | `/api/reports/:id`          | Elimina il report (`204`)                                                                 |
 
-Le route `/api/github` e `/api/repos` richiedono `Authorization: Bearer <accessToken>`; un repository di un altro utente risponde `404`.
+Le route `/api/github`, `/api/repos` e `/api/reports` richiedono `Authorization: Bearer <accessToken>`; un repository o un report di un altro utente risponde `404`.
 
 Metriche giornaliere (UTC): `openIssues` e `openPRs` sono lo stato a fine giornata, `closedIssues` e `mergedPRs` i conteggi del giorno, `ciPassRate` è `success / (success + failure)` delle run GitHub Actions create quel giorno (`null` se non ce ne sono).
 
@@ -109,6 +134,14 @@ Metriche giornaliere (UTC): `openIssues` e `openPRs` sono lo stato a fine giorna
 - **Sync in-process con `setInterval` invece di `node-cron` o di una coda** — basta un intervallo, non un calendario; un lock ottimistico sul repository (`syncStatus` + `syncStartedAt`, ripreso dopo 15 minuti) evita sync concorrenti anche con più istanze. Una coda (BullMQ) servirà solo con molti repository.
 - **Retry sul rate limit solo se l'attesa è ≤ 60 s** — il reset del limite primario può arrivare dopo un'ora: meglio fallire, salvare l'errore in `lastSyncError` e riprovare al giro successivo.
 - **`ciPassRate` nullable** — un giorno senza run CI non è né 0% né 100%; `null` evita di falsare medie e grafici.
+- **Claude Opus 5.5 con structured outputs invece di testo libero** — il modello restituisce JSON validato con Zod (riassunto, attività, tech debt, priorità); il Markdown lo costruisce il server. Formato stabile, testo escapato e link limitati agli URL presenti nei dati, così il modello non può inventare riferimenti. Alternativa scartata: chiedere direttamente Markdown, impossibile da validare e da filtrare.
+- **I numeri li calcola il codice, non il modello** — `buildReportInput` conta issue, PR, run CI e seleziona tech debt candidato (issue aperte da 30+ giorni, PR ferme da 7+, workflow che falliscono) con funzioni pure testate; al modello chiediamo di interpretarli e di dare priorità. Liste limitate a 15 elementi per categoria, con il totale reale.
+- **`create()` + Zod invece di `messages.parse()` dell'SDK** — `parse()` lancia un errore generico su JSON troncato prima che si possa leggere `stop_reason`; validando noi distinguiamo `AI_TRUNCATED`, `AI_REFUSED` e `AI_INVALID_OUTPUT`.
+- **Fallback server-side (`fallbacks: "default"`)** — se i classificatori di sicurezza rifiutano la richiesta, l'API la ripete su un modello alternativo nella stessa chiamata; salviamo in `Report.model` il modello che ha risposto davvero. Disattivabile con `REPORT_FALLBACKS=false`.
+- **Titoli di issue e PR trattati come dati non fidati** — arrivano nel prompt dentro `<repository_data>`, tagliati a 200 caratteri, con istruzione esplicita di non eseguirli (prompt injection).
+- **Senza GitHub collegato il report usa solo le metriche** — così funziona anche sui dati del seed; il report lo dichiara e non elenca singole issue.
+- **Generazione sincrona con lock per repository** — una richiesta HTTP di 30-90 s è accettabile per un'azione manuale; un `Set` in memoria impedisce due generazioni parallele dello stesso repository (`409`). Alternativa scartata per ora: coda di job con polling, necessaria con più istanze o generazioni schedulate (Fase 6).
+- **PDF con pdfkit dal nostro Markdown** — libreria JS pura, nessun browser headless da installare su Railway. Rende solo il sottoinsieme di Markdown che generiamo noi; font standard Helvetica (caratteri non latini non supportati, vedi TODO).
 - **`closedIssues` e `mergedPRs` sono conteggi giornalieri** — il seed della Fase 1 li trattava come cumulativi; ora seed e sync usano la stessa semantica, e i totali si ottengono sommando la serie.
 
 ## TODO
@@ -119,5 +152,8 @@ Metriche giornaliere (UTC): `openIssues` e `openPRs` sono lo stato a fine giorna
 - `Repository.githubId` è `Int`: gli id GitHub sono oggi intorno a 1,4 miliardi, il limite è 2,1. Passare a `BigInt` prima che diventi un problema.
 - Paginazione GitHub limitata a 10 pagine da 100 elementi per chiamata: repository con oltre 1000 issue aperte avranno metriche parziali (segnalato nei log).
 - Pulizia periodica dei refresh/reset token scaduti (job schedulato).
+- Report AI: crea una chiave API su [platform.claude.com](https://platform.claude.com) e imposta `ANTHROPIC_API_KEY`. La chiamata reale a Claude non è stata provata in sviluppo (nessuna chiave disponibile): i test esercitano l'SDK con risposte HTTP simulate.
+- PDF: embeddare un font Unicode (es. Noto Sans) per titoli con caratteri non latini.
+- Generazione report in background (coda + polling) quando arriveranno i report schedulati della Fase 6.
 
 - Deploy (Fase 7): richiede account Railway (backend + Postgres) e Vercel (frontend) — da configurare dal maintainer.
