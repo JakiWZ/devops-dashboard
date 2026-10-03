@@ -41,8 +41,8 @@ function GitHubConnection() {
   if (!configured) {
     return (
       <p className="text-sm text-slate-600 dark:text-slate-400">
-        GitHub integration is not configured on the server (missing{' '}
-        <code>GITHUB_TOKEN_ENC_KEY</code>). Seeded demo data is still available.
+        GitHub integration is not configured on the server (missing <code>SECRETS_ENC_KEY</code>).
+        Seeded demo data is still available.
       </p>
     );
   }

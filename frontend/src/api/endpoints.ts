@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import { request, requestJson } from './http';
 import {
+  aiModelsSchema,
+  aiProvidersSchema,
+  aiSettingsSchema,
+  aiVerifySchema,
   availableReposSchema,
   githubStatusSchema,
   metricsRangeSchema,
@@ -96,4 +100,18 @@ export const reportsApi = {
     const fallback = `report.${format === 'pdf' ? 'pdf' : 'md'}`;
     return { blob: await res.blob(), fileName: match?.[1] ?? fallback };
   },
+};
+
+export const aiApi = {
+  providers: () => requestJson('/api/ai/providers', aiProvidersSchema),
+  models: (provider: string) =>
+    requestJson(`/api/ai/providers/${encodeURIComponent(provider)}/models`, aiModelsSchema),
+  verify: (provider: string, apiKey: string) =>
+    requestJson('/api/ai/verify', aiVerifySchema, { method: 'POST', body: { provider, apiKey } }),
+  settings: () => requestJson('/api/ai/settings', aiSettingsSchema),
+  save: (body: { provider: string; apiKey: string; model: string }) =>
+    requestJson('/api/ai/credential', aiSettingsSchema, { method: 'PUT', body }),
+  setModel: (model: string) =>
+    requestJson('/api/ai/credential', aiSettingsSchema, { method: 'PATCH', body: { model } }),
+  remove: () => request('/api/ai/credential', { method: 'DELETE' }),
 };

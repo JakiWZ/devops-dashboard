@@ -65,6 +65,7 @@ export const reportSummarySchema = z.object({
   summary: z.string(),
   generatedAt: z.string(),
   model: z.string().nullable(),
+  provider: z.string().nullable().optional(),
   periodStart: z.string().nullable(),
   periodEnd: z.string().nullable(),
 });
@@ -77,6 +78,40 @@ export const reportListSchema = z.object({
 export const reportSchema = reportSummarySchema.extend({ content: z.string() });
 export const reportResponseSchema = z.object({ report: reportSchema });
 
+export const aiProviderSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  doc: z.string().nullable(),
+  supported: z.boolean(),
+  modelCount: z.number(),
+});
+export const aiProvidersSchema = z.object({ providers: z.array(aiProviderSchema) });
+
+export const aiModelSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  reasoning: z.boolean(),
+  contextWindow: z.number().nullable(),
+  cost: z.object({ input: z.number(), output: z.number() }).nullable(),
+  releaseDate: z.string().nullable(),
+});
+export const aiModelsSchema = z.object({ models: z.array(aiModelSchema) });
+export const aiVerifySchema = z.object({ valid: z.literal(true), models: z.array(aiModelSchema) });
+
+export const aiSettingsSchema = z.object({
+  credential: z
+    .object({
+      provider: z.string(),
+      providerName: z.string(),
+      model: z.string(),
+      keyLast4: z.string(),
+      updatedAt: z.string(),
+    })
+    .nullable(),
+  serverDefault: z.object({ provider: z.string(), model: z.string() }).nullable(),
+  canStoreKeys: z.boolean(),
+});
+
 export type User = z.infer<typeof userSchema>;
 export type Session = z.infer<typeof sessionSchema>;
 export type Metrics = z.infer<typeof metricsSchema>;
@@ -86,3 +121,6 @@ export type AvailableRepo = z.infer<typeof availableRepoSchema>;
 export type GitHubStatus = z.infer<typeof githubStatusSchema>;
 export type ReportSummary = z.infer<typeof reportSummarySchema>;
 export type Report = z.infer<typeof reportSchema>;
+export type AiProvider = z.infer<typeof aiProviderSchema>;
+export type AiModel = z.infer<typeof aiModelSchema>;
+export type AiSettings = z.infer<typeof aiSettingsSchema>;

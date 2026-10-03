@@ -24,7 +24,12 @@ test.describe('report generation', () => {
     });
 
     await login(page, '/reports');
-    await page.getByLabel('Repository').first().selectOption({ label: 'acme/infra' });
+    // Il filtro dello storico si chiama anch'esso "Repository" ed è nel DOM prima che i
+    // repository arrivino: si cerca il selettore dentro la card "New report".
+    await page
+      .locator('section', { has: page.getByRole('heading', { name: 'New report' }) })
+      .getByLabel('Repository')
+      .selectOption({ label: 'acme/infra' });
     await page.getByRole('button', { name: 'Generate report' }).click();
     await expect(page.getByRole('button', { name: 'Generating report…' })).toBeDisabled();
     await expect(page).toHaveURL(/\/reports\/[^/]+$/);

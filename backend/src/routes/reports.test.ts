@@ -36,7 +36,13 @@ class FakeReportGenerator implements ReportGenerator {
     this.inputs.push(input);
     if (this.delayMs) await new Promise((resolve) => setTimeout(resolve, this.delayMs));
     if (this.fail) throw this.fail;
-    return { draft, model: 'claude-opus-5-5', inputTokens: 1000, outputTokens: 200 };
+    return {
+      draft,
+      provider: 'anthropic',
+      model: 'claude-opus-5-5',
+      inputTokens: 1000,
+      outputTokens: 200,
+    };
   }
 }
 

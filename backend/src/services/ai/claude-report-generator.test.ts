@@ -1,8 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { HttpError } from '../../lib/http-error.js';
-import type { ReportDraft } from './report-draft.js';
-import { ClaudeReportGenerator } from './report-generator.js';
-import { buildReportInput } from './report-input.js';
+import type { ReportDraft } from '../reports/report-draft.js';
+import { ClaudeReportGenerator } from './claude-report-generator.js';
+import { buildReportInput } from '../reports/report-input.js';
 
 const input = buildReportInput({
   repository: { name: 'acme/web', url: 'https://github.com/acme/web', defaultBranch: 'main' },
@@ -95,6 +95,7 @@ describe('ClaudeReportGenerator', () => {
     const { generator } = generatorWith(200, messageResponse({ model: 'claude-opus-4-8' }));
     await expect(generator.generate(input)).resolves.toEqual({
       draft,
+      provider: 'anthropic',
       model: 'claude-opus-4-8',
       inputTokens: 1200,
       outputTokens: 300,

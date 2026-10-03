@@ -54,6 +54,7 @@ export function ReportDetailPage() {
           <h1 className="text-2xl font-semibold">{data.repositoryName}</h1>
           <p className="text-sm text-slate-600 dark:text-slate-400">
             Generated {formatDateTime(data.generatedAt)}
+            {data.provider && ` · ${data.provider}`}
             {data.model && ` · ${data.model}`}
           </p>
         </div>

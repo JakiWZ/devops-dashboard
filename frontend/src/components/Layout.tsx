@@ -7,6 +7,7 @@ const links = [
   { to: '/', label: 'Overview', end: true },
   { to: '/repos', label: 'Repositories', end: false },
   { to: '/reports', label: 'Reports', end: false },
+  { to: '/settings/ai', label: 'AI settings', end: false },
 ];
 
 function ApiStatus() {
