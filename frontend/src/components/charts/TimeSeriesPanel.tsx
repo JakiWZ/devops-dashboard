@@ -13,6 +13,7 @@ import { formatShortDate } from '../../lib/dates';
 import type { DailyPoint } from '../../lib/metrics';
 import { axisProps, GRID, SURFACE } from './chart-style';
 import { ChartTooltip } from './ChartTooltip';
+import { useMountInTurn } from './useMountInTurn';
 
 export type SeriesKey = Exclude<keyof DailyPoint, 'date'>;
 
@@ -43,6 +44,7 @@ export function TimeSeriesPanel({
   yDomain,
   yTickFormatter,
 }: PanelProps) {
+  const [placeholder, ready] = useMountInTurn<HTMLDivElement>();
   const common = {
     data,
     syncId,
@@ -58,7 +60,9 @@ export function TimeSeriesPanel({
         scale="band"
         {...axisProps}
         tickFormatter={formatShortDate}
-        minTickGap={24}
+        // Intervallo fisso (~6 etichette) invece di minTickGap: con minTickGap Recharts misura nel DOM
+        // ogni etichetta, e quei layout forzati erano la parte più lenta del primo render su mobile.
+        interval={Math.max(0, Math.ceil(data.length / 6) - 1)}
       />
       <YAxis
         {...axisProps}
@@ -84,35 +88,40 @@ export function TimeSeriesPanel({
         />
         {label}
       </figcaption>
-      <ResponsiveContainer width="100%" height={height}>
-        {kind === 'line' ? (
-          <LineChart {...common}>
-            {axes}
-            <Line
-              type="monotone"
-              dataKey={dataKey}
-              name={label}
-              stroke={color}
-              strokeWidth={2}
-              dot={false}
-              activeDot={{ r: 4, stroke: SURFACE, strokeWidth: 2 }}
-              connectNulls={false}
-              isAnimationActive={false}
-            />
-          </LineChart>
-        ) : (
-          <BarChart {...common} barCategoryGap={2}>
-            {axes}
-            <Bar
-              dataKey={dataKey}
-              name={label}
-              fill={color}
-              radius={[4, 4, 0, 0]}
-              isAnimationActive={false}
-            />
-          </BarChart>
-        )}
-      </ResponsiveContainer>
+      {/* Stessa altezza prima e dopo il montaggio del grafico: nessuno spostamento di layout. */}
+      {!ready ? (
+        <div ref={placeholder} style={{ height }} />
+      ) : (
+        <ResponsiveContainer width="100%" height={height}>
+          {kind === 'line' ? (
+            <LineChart {...common}>
+              {axes}
+              <Line
+                type="monotone"
+                dataKey={dataKey}
+                name={label}
+                stroke={color}
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 4, stroke: SURFACE, strokeWidth: 2 }}
+                connectNulls={false}
+                isAnimationActive={false}
+              />
+            </LineChart>
+          ) : (
+            <BarChart {...common} barCategoryGap={2}>
+              {axes}
+              <Bar
+                dataKey={dataKey}
+                name={label}
+                fill={color}
+                radius={[4, 4, 0, 0]}
+                isAnimationActive={false}
+              />
+            </BarChart>
+          )}
+        </ResponsiveContainer>
+      )}
     </figure>
   );
 }

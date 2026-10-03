@@ -73,7 +73,8 @@ export function DashboardPage() {
         </>
       )}
 
-      {all.length > 0 && (
+      {/* Sotto i grafici solo quando sono pronti: altrimenti il loro arrivo sposta le card (CLS). */}
+      {all.length > 0 && !metrics.isPending && (
         <div className="grid gap-4 lg:grid-cols-2">
           <Card
             title="Repositories"

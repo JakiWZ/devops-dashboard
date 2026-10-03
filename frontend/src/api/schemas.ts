@@ -1,6 +1,7 @@
-import { z } from 'zod';
+import { z } from 'zod/mini';
 
-// Le risposte del backend sono validate al confine: un cambio di contratto emerge come errore
+// Le risposte del backend sono validate al confine (con zod/mini, che a differenza dell'API
+// classica è tree-shakable e pesa molto meno nel bundle iniziale): un cambio di contratto emerge come errore
 // esplicito invece che come `undefined` sparso nei componenti.
 
 export const userSchema = z.object({
@@ -18,7 +19,7 @@ export const metricsSchema = z.object({
   closedIssues: z.number(),
   openPRs: z.number(),
   mergedPRs: z.number(),
-  ciPassRate: z.number().nullable(),
+  ciPassRate: z.nullable(z.number()),
 });
 
 export const syncStatusSchema = z.enum(['IDLE', 'SYNCING', 'FAILED']);
@@ -27,12 +28,12 @@ export const repositorySchema = z.object({
   id: z.string(),
   name: z.string(),
   url: z.string(),
-  defaultBranch: z.string().nullable(),
+  defaultBranch: z.nullable(z.string()),
   isPrivate: z.boolean(),
   syncStatus: syncStatusSchema,
-  lastSyncError: z.string().nullable(),
-  lastSyncedAt: z.string().nullable(),
-  latestMetrics: metricsSchema.nullable().optional(),
+  lastSyncError: z.nullable(z.string()),
+  lastSyncedAt: z.nullable(z.string()),
+  latestMetrics: z.optional(z.nullable(metricsSchema)),
 });
 
 export const repositoryListSchema = z.object({ repositories: z.array(repositorySchema) });
@@ -55,7 +56,7 @@ export const metricsRangeSchema = z.object({
 export const githubStatusSchema = z.object({
   configured: z.boolean(),
   connected: z.boolean(),
-  login: z.string().nullable(),
+  login: z.nullable(z.string()),
 });
 
 export const reportSummarySchema = z.object({
@@ -64,10 +65,10 @@ export const reportSummarySchema = z.object({
   repositoryName: z.string(),
   summary: z.string(),
   generatedAt: z.string(),
-  model: z.string().nullable(),
-  provider: z.string().nullable().optional(),
-  periodStart: z.string().nullable(),
-  periodEnd: z.string().nullable(),
+  model: z.nullable(z.string()),
+  provider: z.optional(z.nullable(z.string())),
+  periodStart: z.nullable(z.string()),
+  periodEnd: z.nullable(z.string()),
 });
 
 export const reportListSchema = z.object({
@@ -75,13 +76,13 @@ export const reportListSchema = z.object({
   total: z.number(),
 });
 
-export const reportSchema = reportSummarySchema.extend({ content: z.string() });
+export const reportSchema = z.extend(reportSummarySchema, { content: z.string() });
 export const reportResponseSchema = z.object({ report: reportSchema });
 
 export const aiProviderSchema = z.object({
   id: z.string(),
   name: z.string(),
-  doc: z.string().nullable(),
+  doc: z.nullable(z.string()),
   supported: z.boolean(),
   modelCount: z.number(),
 });
@@ -91,24 +92,24 @@ export const aiModelSchema = z.object({
   id: z.string(),
   name: z.string(),
   reasoning: z.boolean(),
-  contextWindow: z.number().nullable(),
-  cost: z.object({ input: z.number(), output: z.number() }).nullable(),
-  releaseDate: z.string().nullable(),
+  contextWindow: z.nullable(z.number()),
+  cost: z.nullable(z.object({ input: z.number(), output: z.number() })),
+  releaseDate: z.nullable(z.string()),
 });
 export const aiModelsSchema = z.object({ models: z.array(aiModelSchema) });
 export const aiVerifySchema = z.object({ valid: z.literal(true), models: z.array(aiModelSchema) });
 
 export const aiSettingsSchema = z.object({
-  credential: z
-    .object({
+  credential: z.nullable(
+    z.object({
       provider: z.string(),
       providerName: z.string(),
       model: z.string(),
       keyLast4: z.string(),
       updatedAt: z.string(),
-    })
-    .nullable(),
-  serverDefault: z.object({ provider: z.string(), model: z.string() }).nullable(),
+    }),
+  ),
+  serverDefault: z.nullable(z.object({ provider: z.string(), model: z.string() })),
   canStoreKeys: z.boolean(),
 });
 
