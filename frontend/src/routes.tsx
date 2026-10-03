@@ -46,6 +46,12 @@ export const routes: RouteObject[] = [
               Component: (await import('./pages/AiSettingsPage')).AiSettingsPage,
             }),
           },
+          {
+            path: 'settings/notifications',
+            lazy: async () => ({
+              Component: (await import('./pages/NotificationsPage')).NotificationsPage,
+            }),
+          },
           { path: '*', element: <NotFoundPage /> },
         ],
       },

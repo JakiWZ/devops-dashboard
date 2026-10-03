@@ -29,8 +29,15 @@ import { AiSettingsService } from './services/ai/ai-settings.service.js';
 import { aiRouter } from './routes/ai.routes.js';
 import { ReportService } from './services/reports/report.service.js';
 import { RepoService } from './services/repos.service.js';
-import { RepoSyncService } from './services/sync/sync.service.js';
+import { RepoSyncService, type SyncListener } from './services/sync/sync.service.js';
 import { SecretBox } from './lib/secret-box.js';
+import {
+  NotificationService,
+  type TelegramConfig,
+} from './services/notifications/notification.service.js';
+import { TelegramBotApi } from './services/notifications/telegram.js';
+import { ReportWeeklySource } from './services/notifications/weekly-source.js';
+import { notificationsRouter, telegramRouter } from './routes/notifications.routes.js';
 
 export interface AppDeps {
   databaseProbe?: DatabaseProbe;
@@ -42,6 +49,18 @@ export interface AppDeps {
   /** Nei test: catalogo e fetch finti per i provider AI. */
   aiCatalog?: AiCatalog;
   aiFetch?: typeof globalThis.fetch;
+  /** Nei test: Telegram finto (null lo spegne anche se il token è configurato). */
+  telegram?: TelegramConfig | null;
+  /** Servizi già costruiti (server.ts li condivide con gli scheduler). */
+  services?: AppServices;
+}
+
+export interface AppServices {
+  auth: AuthService;
+  github: GitHubServices;
+  aiSettings: AiSettingsService;
+  reports: ReportService;
+  notifications: NotificationService;
 }
 
 export interface GitHubServices {
@@ -53,28 +72,35 @@ export interface GitHubServices {
 export function createGitHubServices(
   db: PrismaClient,
   clientFactory: GitHubClientFactory = createOctokitClientFactory(),
+  onSynced: SyncListener | null = null,
 ): GitHubServices {
   const secretBox = env.secretsKey ? new SecretBox(env.secretsKey) : null;
   const accounts = new GitHubAccountService(db, clientFactory, secretBox);
   return {
     accounts,
     repos: new RepoService(db, accounts),
-    sync: new RepoSyncService(db, (userId) => accounts.clientFor(userId)),
+    sync: new RepoSyncService(db, (userId) => accounts.clientFor(userId), undefined, onSynced),
   };
 }
 
-export function createApp({
-  databaseProbe = prismaProbe,
+function telegramFromEnv(): TelegramConfig | null {
+  if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_BOT_USERNAME) return null;
+  return {
+    api: new TelegramBotApi(env.TELEGRAM_BOT_TOKEN),
+    botUsername: env.TELEGRAM_BOT_USERNAME.replace(/^@/, ''),
+    webhookSecret: env.TELEGRAM_WEBHOOK_SECRET ?? null,
+  };
+}
+
+export function createServices({
   db = prisma,
   emailSender = createEmailSender(),
   githubClientFactory,
   reportGenerator,
   aiCatalog = new AiCatalog(),
   aiFetch,
-}: AppDeps = {}): Express {
-  const app = express();
-  const authService = new AuthService(db, emailSender);
-  const github = createGitHubServices(db, githubClientFactory);
+  telegram = telegramFromEnv(),
+}: AppDeps = {}): AppServices {
   const secretBox = env.secretsKey ? new SecretBox(env.secretsKey) : null;
   const aiSettings = new AiSettingsService(
     db,
@@ -92,7 +118,36 @@ export function createApp({
     reportGenerator === undefined
       ? aiSettings
       : { generatorFor: () => Promise.resolve(reportGenerator) };
-  const reportService = new ReportService(db, github.repos, github.accounts, generators);
+  // Il sync notifica gli alert, che dipendono dai report: il listener legge `notifications` a runtime.
+  let notifications: NotificationService | null = null;
+  const github = createGitHubServices(db, githubClientFactory, (repo, data) =>
+    notifications ? notifications.onRepositorySynced(repo, data) : Promise.resolve(),
+  );
+  const reports = new ReportService(db, github.repos, github.accounts, generators);
+  notifications = new NotificationService(
+    db,
+    emailSender,
+    new ReportWeeklySource(db, reports, env.APP_URL),
+    {
+      emailConfigured: Boolean(env.RESEND_API_KEY),
+      telegram,
+      appUrl: env.APP_URL,
+    },
+  );
+  return {
+    auth: new AuthService(db, emailSender),
+    github,
+    aiSettings,
+    reports,
+    notifications,
+  };
+}
+
+export function createApp(deps: AppDeps = {}): Express {
+  const { databaseProbe = prismaProbe, db = prisma } = deps;
+  const app = express();
+  const services = deps.services ?? createServices(deps);
+  const { auth: authService, github, aiSettings, reports: reportService } = services;
 
   app.disable('x-powered-by');
   // In produzione siamo dietro il proxy di Railway: senza questo il rate limit vedrebbe un solo IP.
@@ -119,6 +174,8 @@ export function createApp({
   app.use('/api/repos', reposRouter(github.repos, github.sync));
   app.use('/api/reports', reportsRouter(reportService));
   app.use('/api/ai', aiRouter(aiSettings));
+  app.use('/api/notifications', notificationsRouter(services.notifications));
+  app.use('/api/telegram', telegramRouter(services.notifications));
 
   app.use(notFoundHandler);
   app.use(errorHandler);

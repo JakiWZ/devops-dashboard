@@ -112,6 +112,28 @@ export const aiSettingsSchema = z.object({
   canStoreKeys: z.boolean(),
 });
 
+export const notificationPreferencesSchema = z.object({
+  emailEnabled: z.boolean(),
+  telegramEnabled: z.boolean(),
+  weeklyReport: z.boolean(),
+  ciFailureAlerts: z.boolean(),
+  stalledPrAlerts: z.boolean(),
+  weeklyDay: z.number(),
+  weeklyHour: z.number(),
+  timezone: z.string(),
+});
+
+export const notificationSettingsSchema = z.object({
+  preferences: notificationPreferencesSchema,
+  email: z.object({ address: z.string(), configured: z.boolean() }),
+  telegram: z.object({ configured: z.boolean(), connected: z.boolean() }),
+});
+
+export const telegramLinkSchema = z.object({ url: z.string(), expiresAt: z.string() });
+export const testNotificationSchema = z.object({
+  delivered: z.array(z.enum(['email', 'telegram'])),
+});
+
 export type User = z.infer<typeof userSchema>;
 export type Session = z.infer<typeof sessionSchema>;
 export type Metrics = z.infer<typeof metricsSchema>;
@@ -124,3 +146,5 @@ export type Report = z.infer<typeof reportSchema>;
 export type AiProvider = z.infer<typeof aiProviderSchema>;
 export type AiModel = z.infer<typeof aiModelSchema>;
 export type AiSettings = z.infer<typeof aiSettingsSchema>;
+export type NotificationPreferences = z.infer<typeof notificationPreferencesSchema>;
+export type NotificationSettings = z.infer<typeof notificationSettingsSchema>;

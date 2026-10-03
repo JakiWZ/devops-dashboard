@@ -1,5 +1,12 @@
 import { useQueries, useQuery } from '@tanstack/react-query';
-import { aiApi, githubApi, reportsApi, reposApi, type ReportFilters } from '../api/endpoints';
+import {
+  aiApi,
+  githubApi,
+  notificationsApi,
+  reportsApi,
+  reposApi,
+  type ReportFilters,
+} from '../api/endpoints';
 import type { Range } from '../lib/dates';
 import { aggregateMetrics, type DailyPoint } from '../lib/metrics';
 
@@ -14,7 +21,17 @@ export const queryKeys = {
   report: (id: string) => ['reports', id] as const,
   aiSettings: ['ai', 'settings'] as const,
   aiProviders: ['ai', 'providers'] as const,
+  notifications: ['notifications'] as const,
 };
+
+/** Con `poll` si aggiorna ogni 3 s finché la chat Telegram non risulta collegata (/start sul bot). */
+export function useNotificationSettings(poll = false) {
+  return useQuery({
+    queryKey: queryKeys.notifications,
+    queryFn: notificationsApi.settings,
+    refetchInterval: (query) => (poll && !query.state.data?.telegram.connected ? 3000 : false),
+  });
+}
 
 export function useAiSettings() {
   return useQuery({ queryKey: queryKeys.aiSettings, queryFn: aiApi.settings });
