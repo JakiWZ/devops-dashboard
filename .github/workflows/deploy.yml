@@ -1,0 +1,82 @@
+name: Deploy
+
+# Deploy automatico dopo una CI verde su main: prima il backend su Railway (le migrazioni girano
+# nel preDeployCommand di backend/railway.json), poi il frontend su Vercel.
+# Ogni job si salta da solo, con un avviso, finché i segreti del repository non sono configurati
+# (vedi README, "Deploy").
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_SERVICE: ${{ vars.RAILWAY_SERVICE }}
+    steps:
+      - name: Check configuration
+        id: config
+        run: |
+          if [ -z "$RAILWAY_TOKEN" ] || [ -z "$RAILWAY_SERVICE" ]; then
+            echo "::notice::Railway non configurato (segreto RAILWAY_TOKEN e variabile RAILWAY_SERVICE): deploy del backend saltato."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.config.outputs.enabled == 'true'
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: actions/setup-node@v4
+        if: steps.config.outputs.enabled == 'true'
+        with:
+          node-version: 22
+      - name: Deploy to Railway
+        if: steps.config.outputs.enabled == 'true'
+        working-directory: backend
+        run: npx --yes @railway/cli up --ci --service "$RAILWAY_SERVICE"
+
+  frontend:
+    needs: backend
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+    steps:
+      - name: Check configuration
+        id: config
+        run: |
+          if [ -z "$VERCEL_TOKEN" ] || [ -z "$VERCEL_ORG_ID" ] || [ -z "$VERCEL_PROJECT_ID" ]; then
+            echo "::notice::Vercel non configurato (segreto VERCEL_TOKEN e variabili VERCEL_ORG_ID, VERCEL_PROJECT_ID): deploy del frontend saltato."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.config.outputs.enabled == 'true'
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - name: Deploy to Vercel
+        if: steps.config.outputs.enabled == 'true'
+        # Dalla radice del repository: il progetto Vercel ha Root Directory = frontend, dove trova
+        # vercel.json. VITE_API_URL arriva dalle variabili d'ambiente del progetto (Production).
+        run: |
+          npx --yes vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+          npx --yes vercel build --prod --token="$VERCEL_TOKEN"
+          npx --yes vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"

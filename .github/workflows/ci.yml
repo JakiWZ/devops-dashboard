@@ -117,3 +117,41 @@ jobs:
           name: playwright-report
           path: frontend/playwright-report
           retention-days: 7
+
+  docker:
+    # Costruisce l'immagine di produzione del backend (quella che usa Railway) e la avvia contro un
+    # Postgres vero: migrazioni dal container, poi health check. Intercetta Dockerfile rotti prima del deploy.
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: devops_dashboard
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U ci" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t devops-dashboard-api backend
+      - name: Run migrations from the image
+        run: |
+          docker run --rm --network host \
+            -e DATABASE_URL=postgresql://ci:ci@localhost:5432/devops_dashboard?schema=public \
+            devops-dashboard-api npx prisma migrate deploy
+      - name: Start the API and check health
+        run: |
+          docker run -d --name api --network host \
+            -e NODE_ENV=production \
+            -e PORT=4000 \
+            -e DATABASE_URL=postgresql://ci:ci@localhost:5432/devops_dashboard?schema=public \
+            -e JWT_ACCESS_SECRET=ci-only-secret-ci-only-secret-ci-only-secret \
+            devops-dashboard-api
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:4000/api/health; then echo; exit 0; fi
+            sleep 2
+          done
+          docker logs api
+          exit 1

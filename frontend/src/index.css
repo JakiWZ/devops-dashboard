@@ -3,6 +3,12 @@
 /* Dark mode guidata dalla classe .dark su <html>, così può seguire sia il sistema sia una scelta esplicita. */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Spazio della scrollbar sempre riservato: quando i dati allungano la pagina il contenuto centrato
+   non scatta di lato (era il layout shift più grande della Overview su desktop). */
+html {
+  scrollbar-gutter: stable;
+}
+
 /* Palette dei grafici: slot categorici 1-2 della palette di riferimento dataviz, validati
    (CVD, contrasto >= 3:1) sulla superficie delle card in entrambi i temi. */
 :root {

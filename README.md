@@ -1,26 +1,82 @@
 # DevOps Dashboard
 
-Dashboard full-stack che monitora repository GitHub e genera report intelligenti con AI.
-Progetto dimostrativo sviluppato interamente con Claude Code. Specifica completa in [`SPEC.md`](SPEC.md).
+[![CI](https://github.com/JakiWZ/devops-dashboard/actions/workflows/ci.yml/badge.svg)](https://github.com/JakiWZ/devops-dashboard/actions/workflows/ci.yml)
 
-> **Stato:** Fase 6 (notifiche) — oltre ad auth (Fase 2), integrazione GitHub con metriche giornaliere (Fase 3), report AI con provider a scelta (Fase 4 e 3b) e dashboard React (Fase 5), ora le notifiche: report settimanale automatico e alert su CI fallite e PR bloccate, via email (Resend) e bot Telegram, con preferenze per utente (canali, cosa ricevere, giorno, ora e fuso). Il deploy arriva nella Fase 7.
+Dashboard full-stack che monitora repository GitHub (issue, pull request, pass rate della CI) e genera report settimanali con l'AI del provider che preferisci, inviati per email o Telegram.
+Progetto dimostrativo sviluppato interamente con Claude Code, a fasi, una PR per fase. Specifica completa in [`SPEC.md`](SPEC.md).
+
+**Demo live:** _TODO: link dopo il primo deploy su Vercel e Railway (vedi [Deploy](#deploy))._ In locale servono solo Node e Postgres, con utenti e dati demo dal seed (vedi [Setup locale](#setup-locale)).
+
+![Overview in tema chiaro](docs/screenshots/overview-light.png)
+
+| Tema scuro, con crosshair sincronizzato                       | Report AI                                        | Mobile                                                                                |
+| ------------------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| ![Overview in tema scuro](docs/screenshots/overview-dark.png) | ![Dettaglio report](docs/screenshots/report.png) | <img src="docs/screenshots/overview-mobile.png" width="220" alt="Overview su mobile"> |
+
+![Preferenze delle notifiche](docs/screenshots/notifications.png)
+
+## Cosa fa
+
+- **Auth completa**: registrazione, login, refresh token ruotati in cookie httpOnly, ruoli `USER`/`ADMIN`, reset password via email.
+- **GitHub**: ogni utente collega un token in sola lettura e sceglie i repository; un sync periodico salva metriche giornaliere (issue aperte e chiuse, PR aperte e merged, pass rate della CI).
+- **Dashboard**: KPI, grafici con filtro per repository e intervallo di date, tabella dati accessibile, tema chiaro e scuro, mobile.
+- **Report AI**: riassunto settimanale, tech debt e priorità, con un provider a scelta tra quelli del catalogo [models.dev](https://models.dev) (Anthropic, OpenAI, Google, DeepSeek...). Storico, export Markdown e PDF.
+- **Notifiche**: report settimanale nel giorno, ora e fuso scelti, alert su CI fallite e PR ferme, via email (Resend) e bot Telegram.
 
 ## Stack
 
-| Layer    | Tecnologia                                                                                     |
-| -------- | ---------------------------------------------------------------------------------------------- |
-| Frontend | React 19, TypeScript 5.9, Vite 8, Tailwind CSS 4, React Router 8, TanStack Query 5, Recharts 3 |
-| Backend  | Node.js 22, Express 5, TypeScript 5.9, Zod 4, Pino 10, Vercel AI SDK 7                         |
-| Database | PostgreSQL 16, Prisma 6                                                                        |
-| Test     | Jest 30 + Supertest (backend), Vitest (frontend, unit), Playwright (E2E)                       |
-| CI       | GitHub Actions                                                                                 |
+| Layer    | Tecnologia                                                                                                           |
+| -------- | -------------------------------------------------------------------------------------------------------------------- |
+| Frontend | React 19.2, TypeScript 5.9, Vite 8.3, Tailwind CSS 4.3, React Router 8.4, TanStack Query 5, Recharts 3, Zod 4 (mini) |
+| Backend  | Node.js 22, Express 5.2, TypeScript 5.9, Zod 4, Pino 10, Octokit 22, Vercel AI SDK 7, SDK Anthropic                  |
+| Database | PostgreSQL 16, Prisma 6.19                                                                                           |
+| Test     | Jest 30 + Supertest 7 (backend), Vitest 5 (frontend), Playwright 1.63 (E2E)                                          |
+| CI/CD    | GitHub Actions (lint, typecheck, test, build, E2E, immagine Docker), deploy su Railway (API) e Vercel (SPA)          |
 
-## Struttura
+## Architettura
+
+```mermaid
+flowchart LR
+  subgraph Browser
+    SPA[SPA React<br/>TanStack Query]
+  end
+  subgraph Vercel
+    CDN[Asset statici<br/>e fallback SPA]
+  end
+  subgraph Railway
+    API[API Express<br/>auth, repos, reports, notifiche]
+    SYNC[Sync GitHub<br/>setInterval]
+    WEEK[Scheduler report<br/>settimanali]
+    DB[(PostgreSQL)]
+  end
+  GH[GitHub REST API]
+  AI[Provider AI<br/>Anthropic, OpenAI, ...]
+  MD[models.dev]
+  RS[Resend]
+  TG[Telegram Bot API]
+
+  SPA -- HTML/JS --> CDN
+  SPA -- "JSON + Bearer, cookie refresh" --> API
+  API --> DB
+  SYNC --> GH
+  SYNC -- alert CI e PR --> API
+  WEEK --> AI
+  API --> AI
+  API -. catalogo provider .-> MD
+  API --> RS
+  API -- messaggi --> TG
+  TG -- webhook --> API
+  SYNC --> DB
+  WEEK --> DB
+```
+
+API, sync e scheduler girano nello stesso processo Node: un solo servizio da deployare e da pagare. I servizi sono costruiti una volta in `createServices()` e condivisi tra route e job (vedi "Trade-off").
 
 ```
-frontend/   React + Vite        src/{api,auth,components,pages,hooks,lib}, e2e/ (Playwright)
-backend/    Express + Prisma    src/{routes,controllers,services,middleware,lib,config}, prisma/
-.github/workflows/ci.yml
+frontend/   React + Vite        src/{api,auth,components,pages,hooks,lib}, e2e/ (Playwright), vercel.json
+backend/    Express + Prisma    src/{routes,controllers,services,middleware,lib,config}, prisma/, Dockerfile, railway.json
+.github/workflows/  ci.yml (verifiche su ogni push), deploy.yml (deploy dopo una CI verde su main)
+docs/screenshots/   immagini di questo README
 ```
 
 ## Setup locale
@@ -44,6 +100,8 @@ npm run dev                   # http://localhost:5173 (proxy /api -> :4000)
 ```
 
 In ogni package: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`.
+
+Per provare l'immagine di produzione del backend: `docker build -t devops-dashboard-api backend`, poi `docker run --env-file backend/.env -e NODE_ENV=production -p 4000:4000 devops-dashboard-api` (con un `DATABASE_URL` raggiungibile dal container).
 
 Test E2E (dal frontend, con Postgres attivo e il DB di `backend/.env` migrato e con il seed):
 
@@ -110,6 +168,73 @@ Dalla pagina **Notifications** ogni utente sceglie i canali (email, Telegram), c
   3. Nella pagina Notifications, "Connect Telegram" apre il bot con un codice monouso valido 15 minuti: premendo Start la chat viene collegata. `/stop` nel bot la scollega; se l'utente blocca il bot, la chat viene scollegata al primo invio fallito.
 
 Variabili: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, `TELEGRAM_WEBHOOK_SECRET`, `NOTIFICATION_CHECK_MINUTES` (default 5), `NOTIFICATION_TEST_RATE_LIMIT` (notifiche di prova per IP ogni 15 minuti, default 5).
+
+## Deploy
+
+Il deploy è automatico: dopo una CI verde su `main`, il workflow [`deploy.yml`](.github/workflows/deploy.yml) pubblica prima il backend su Railway (le migrazioni girano prima dell'avvio della nuova versione) e poi il frontend su Vercel. Finché segreti e variabili non sono configurati, i due job si saltano con un avviso invece di fallire. Si può lanciare anche a mano da Actions → Deploy → Run workflow.
+
+> **TODO (maintainer):** servono un account [Railway](https://railway.com) e uno [Vercel](https://vercel.com). Nessun deploy reale è stato fatto durante lo sviluppo: l'immagine Docker è verificata in CI (build, migrazioni dal container e health check contro Postgres), mentre `backend/railway.json` e `frontend/vercel.json` seguono la documentazione delle due piattaforme ma non sono ancora stati provati su un progetto vero.
+
+### 1. Backend e database su Railway
+
+1. Crea un progetto e aggiungi un database **PostgreSQL**.
+2. Aggiungi un servizio vuoto (Empty Service, non collegato al repository: a deployarlo è GitHub Actions, solo dopo la CI verde) e chiamalo ad esempio `api`. Railway costruisce `backend/Dockerfile` come indicato in `backend/railway.json`, lancia `prisma migrate deploy` prima di ogni rilascio e controlla `/api/health`.
+3. Variabili del servizio (Settings → Variables):
+
+   | Variabile                                                                | Valore                                                                            |
+   | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+   | `DATABASE_URL`                                                           | `${{Postgres.DATABASE_URL}}` (riferimento al database del progetto)               |
+   | `NODE_ENV`                                                               | `production`                                                                      |
+   | `JWT_ACCESS_SECRET`                                                      | stringa casuale di almeno 32 caratteri (comando in `backend/.env.example`)        |
+   | `SECRETS_ENC_KEY`                                                        | 32 byte in base64 (comando in `backend/.env.example`); senza, GitHub resta spento |
+   | `CORS_ORIGIN`, `APP_URL`                                                 | URL del frontend su Vercel, es. `https://devops-dashboard.vercel.app`             |
+   | `AI_PROVIDER`, `AI_MODEL`, `AI_API_KEY`                                  | provider AI di default (facoltativo: ogni utente può usare la sua chiave)         |
+   | `RESEND_API_KEY`, `EMAIL_FROM`                                           | email di reset password e notifiche                                               |
+   | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, `TELEGRAM_WEBHOOK_SECRET` | bot delle notifiche (vedi [Notifiche](#notifiche))                                |
+
+   `PORT` la imposta Railway. Le altre variabili hanno default sensati (elenco completo in `backend/.env.example`).
+
+4. Settings → Networking → **Generate Domain**: è l'URL pubblico dell'API.
+5. Crea un token di progetto (Project Settings → Tokens).
+
+### 2. Frontend su Vercel
+
+1. Crea un progetto collegato a questo repository con **Root Directory** `frontend` (framework Vite rilevato da `vercel.json`). I deploy da Git sono disattivati in `vercel.json` (`git.deploymentEnabled: false`): li fa GitHub Actions dopo la CI.
+2. Environment Variables (Production): `VITE_API_URL` = URL dell'API su Railway, senza `/api` finale.
+3. Crea un token (Account Settings → Tokens) e annota `orgId` e `projectId` (Project Settings → General, o `.vercel/project.json` dopo `vercel link`).
+
+### 3. Segreti su GitHub
+
+In Settings → Environments → `production` (o a livello di repository):
+
+| Tipo      | Nome                | Valore                       |
+| --------- | ------------------- | ---------------------------- |
+| Secret    | `RAILWAY_TOKEN`     | token di progetto Railway    |
+| Variabile | `RAILWAY_SERVICE`   | nome del servizio, es. `api` |
+| Secret    | `VERCEL_TOKEN`      | token Vercel                 |
+| Variabile | `VERCEL_ORG_ID`     | `orgId` del progetto         |
+| Variabile | `VERCEL_PROJECT_ID` | `projectId` del progetto     |
+
+### 4. Dopo il primo deploy
+
+- Registra il webhook Telegram sull'URL di Railway (comando in [Notifiche](#notifiche)).
+- Opzionale ma consigliato: un **dominio tuo** con frontend e API sullo stesso sito (es. `app.example.com` e `api.example.com`). Con i domini di default `*.vercel.app` e `*.up.railway.app` il cookie del refresh token è di terze parti, e i browser che le bloccano (Safari, Chrome con la protezione attiva) fanno ripetere il login a ogni ricarica. Vedi "Trade-off".
+- Aggiorna il link della demo in cima a questo README.
+
+## Prestazioni
+
+Requisiti della specifica: Lighthouse > 90 e API sotto i 300 ms di media. Misurati in locale sul build di produzione (`vite preview` + `node dist/server.js` con `NODE_ENV=production`), con i dati del seed, Lighthouse 13 e il profilo mobile di default (CPU 4x più lenta, rete 4G lenta).
+
+| Pagina       | Performance mobile | Performance desktop | Accessibility | Best practices | SEO |
+| ------------ | ------------------ | ------------------- | ------------- | -------------- | --- |
+| Login        | 99                 | 100                 | 100           | 96             | 100 |
+| Overview     | 92                 | 100                 | 100           | 100            | 100 |
+| Repositories | 98                 | 100                 | 100           | 100            | 100 |
+| Reports      | 97                 | 100                 | 100           | 100            | 100 |
+
+Il 96 di best practices sulla login è il `401` del tentativo di refresh in console quando non c'è una sessione.
+
+Tempi delle API (stessa macchina, 22 richieste sequenziali per endpoint dopo 3 di riscaldamento): tutte le letture stanno sotto i 10 ms di media, per esempio `GET /api/repos` 4,4 ms, `GET /api/repos/:id/metrics` su 90 giorni 6,6 ms, `GET /api/reports/:id` 3,5 ms. Le eccezioni sono volute: il login costa ~330 ms perché bcrypt a 12 round è lento apposta, e `POST /api/reports` dura 30-90 s perché aspetta il modello AI. In produzione si aggiunge la latenza di rete verso Railway.
 
 ## API
 
@@ -201,20 +326,54 @@ Metriche giornaliere (UTC): `openIssues` e `openPRs` sono lo stato a fine giorna
 - **Bot Telegram via webhook con codice monouso** — l'utente apre `t.me/<bot>?start=<codice>` e il comando `/start` collega la chat: niente chat id da copiare a mano, e in DB solo l'hash del codice. Il webhook è verificato con il segreto di `setWebhook`. Alternativa scartata: long polling con `getUpdates`, che non richiede un URL pubblico ma tiene una connessione aperta per istanza e non funziona con più istanze.
 - **Alert agganciati al sync invece di un polling separato** — il sync scarica già issue, PR e run CI: gli alert riusano quei dati senza altre chiamate a GitHub, e arrivano al ritmo del sync (`SYNC_INTERVAL_MINUTES`). La deduplica usa una tabella con chiave unica per evento. Alternativa scartata: webhook GitHub, più tempestivi ma richiedono un URL pubblico e una configurazione per repository.
 - **Report settimanale nel fuso dell'utente con scheduler in-process** — giorno, ora e fuso IANA per utente; lo slot si calcola a ritroso ora per ora con `Intl`, così l'ora legale è gestita senza librerie. L'invio è "prenotato" con un update condizionato su `lastWeeklySentAt`, quindi due tick o due istanze non mandano doppioni. Alternativa scartata: un cron esterno (es. Railway cron), un servizio in più da configurare per una sola istanza.
+- **Immagine Docker per Railway invece del build automatico (Nixpacks/Railpack)** — stesso artefatto verificato in CI e in produzione, Node 22 e OpenSSL fissati, build multi-stage con le sole dipendenze di produzione e utente non root. `prisma` sta tra le dipendenze perché `migrate deploy` gira nell'immagine prima di ogni rilascio. Alternativa scartata: il builder automatico, più comodo ma non riproducibile in locale né in CI.
+- **Deploy da GitHub Actions dopo la CI verde, non dalle integrazioni Git delle piattaforme** — Railway e Vercel deployerebbero a ogni push, anche con i test rossi; con `workflow_run` il deploy parte solo da una CI riuscita su `main`, prima il backend (con le migrazioni) e poi il frontend. Alternativa scartata: integrazioni Git native, più semplici ma senza il vincolo sulla CI.
+- **Migrazioni nel `preDeployCommand` di Railway invece che all'avvio del server** — se una migrazione fallisce la versione nuova non parte e resta online la precedente; all'avvio, ogni replica proverebbe a migrare e un errore manderebbe il servizio in crash loop.
+- **`VITE_API_URL` verso l'API invece di un rewrite `/api` su Vercel** — i rewrite esterni di Vercel hanno un timeout più corto della generazione di un report (30-90 s) e l'URL di Railway non si conosce quando si scrive `vercel.json`. Il prezzo è il cookie cross-site (vedi "Trade-off").
+- **zod/mini nel frontend** — stessa validazione delle risposte con l'API funzionale di Zod 4, che il bundler riesce ad alleggerire: il bundle iniziale è sceso di circa 67 kB (18 kB compressi). Il backend resta su Zod classico, dove il peso non conta.
+- **Grafici montati uno per task e solo vicino al viewport** — Recharts disegna in modo sincrono e cinque grafici insieme bloccavano il main thread per ~300 ms su mobile. Con un segnaposto della stessa altezza (niente layout shift) e una coda condivisa il Total Blocking Time della Overview è sceso da ~400 a ~170 ms. Alternativa scartata: grafici in canvas, più veloci ma meno accessibili e da riscrivere.
+- **Guscio statico in `index.html` e `scrollbar-gutter: stable`** — il nome dell'app compare prima che arrivi il JavaScript (First Contentful Paint mobile da 2,2 a 1,5 s), e la comparsa della scrollbar quando arrivano i dati non sposta più il contenuto centrato.
+
+## Trade-off
+
+- **Un solo processo per API, sync e scheduler.** Semplice da deployare e da far girare in locale, e i lock nel database evitano doppioni anche con più istanze. Il limite: un report settimanale da generare per molti utenti occupa lo stesso processo che serve le richieste, e la generazione sincrona di un report tiene aperta una richiesta HTTP per 30-90 secondi. Con più utenti servirà una coda di job (BullMQ su Redis) e un worker separato.
+- **Cookie del refresh token cross-site.** Con frontend e API su domini diversi il cookie è `SameSite=None; Secure`, e i browser che bloccano i cookie di terze parti lo scartano: la sessione non sopravvive a una ricarica. La soluzione pulita è un dominio comune (vedi [Deploy](#deploy)); in alternativa un proxy sullo stesso dominio del frontend, scartato per il timeout dei rewrite.
+- **Token GitHub personale invece di OAuth.** Funziona senza registrare una OAuth App, ma l'utente deve creare e incollare un token. OAuth è la prima voce della roadmap.
+- **Metriche ricostruite dalle API REST.** Senza webhook, lo stato giornaliero si ricostruisce dalle date di apertura e chiusura: preciso per issue e PR, ma limitato a 1000 elementi per chiamata e aggiornato al ritmo del sync (default 6 ore).
+- **Cache ETag e rate limit in memoria.** Bastano con un'istanza; con più istanze ognuna ha la sua cache e i limiti per IP vanno spostati su Redis.
+- **PDF con pdfkit.** Niente browser headless su Railway, ma solo il Markdown che generiamo noi e solo caratteri latini.
+
+## Sfide e soluzioni
+
+- **Output dell'AI affidabile.** Chiedere Markdown al modello dava un formato instabile e link inventati. Soluzione: output strutturato validato con Zod, Markdown costruito dal server con link limitati agli URL presenti nei dati, numeri calcolati dal codice e non dal modello, titoli di issue e PR trattati come dati non fidati contro il prompt injection.
+- **Un provider AI qualsiasi.** Ogni provider ha SDK e formati diversi. Soluzione: catalogo models.dev (lo stesso di OpenCode) per provider e modelli, Vercel AI SDK per le famiglie compatibili, adapter dedicato per Anthropic, tutto dietro un solo modulo `services/ai`. La chiave dell'utente viene verificata prima di salvarla e cifrata con AES-256-GCM.
+- **Refresh token e richieste concorrenti.** Il backend tratta il riuso di un refresh token già ruotato come un furto e chiude la sessione, ma React in StrictMode e più query con `401` facevano partire due refresh insieme. Soluzione: una sola promise di refresh condivisa nel client.
+- **Report settimanale "alle 8 di lunedì" per ogni utente.** Fusi orari e ora legale senza librerie: lo slot si calcola a ritroso ora per ora con `Intl`, l'invio è prenotato con un update condizionato (niente doppioni con due tick o due istanze) e un server spento recupera l'invio entro 24 ore.
+- **Rate limit di GitHub.** Richieste condizionali con ETag (le risposte `304` non consumano il limite), retry solo se il reset è entro 60 secondi, altrimenti l'errore resta sul repository e si riprova al sync successivo.
+- **Lighthouse sotto 90 su mobile.** La Overview partiva da 66: layout shift dalle card che comparivano prima dei grafici, cinque grafici disegnati nello stesso task, nessun contenuto prima del JavaScript. Le correzioni sono nelle ultime righe di "Decisioni tecniche".
+- **Verificare il deploy senza account.** Railway e Vercel richiedono account del maintainer, quindi la CI costruisce l'immagine di produzione, la avvia contro Postgres, applica le migrazioni dal container e interroga `/api/health`: un Dockerfile rotto si scopre in CI e non al primo deploy.
+
+## Roadmap
+
+- Login con GitHub OAuth al posto del token personale.
+- Webhook GitHub per metriche e alert in tempo reale, senza aspettare il sync.
+- Coda di job (BullMQ) per generazione dei report e report settimanali, con worker separato.
+- Pagine frontend per password dimenticata e reset (il backend le supporta già).
+- Email HTML con link di disiscrizione in un clic; altri canali (Slack, Discord).
+- Metriche aggiuntive: lead time delle PR, tempo di prima risposta alle issue, durata delle run CI.
+- Supporto a GitLab e Bitbucket dietro la stessa interfaccia `GitHubClient`.
+- Prisma 7 e TypeScript 6 quando gli strumenti li supporteranno.
 
 ## TODO
 
-- Email: crea un account [Resend](https://resend.com), verifica un dominio e imposta `RESEND_API_KEY` e `EMAIL_FROM`. Senza chiave il reset password non invia email.
-- OAuth GitHub (opzionale da spec): richiede una GitHub OAuth App (client id/secret) — non implementato; oggi si usa un personal access token.
-- Webhook GitHub per aggiornamenti real-time (opzionale da spec): richiede un URL pubblico, dopo il deploy.
+Cose che richiedono un account o una chiave del maintainer, o limiti noti:
+
+- **Deploy**: account Railway e Vercel e segreti GitHub, passo passo in [Deploy](#deploy); poi il link della demo in cima.
+- **Email**: account [Resend](https://resend.com), dominio verificato, `RESEND_API_KEY` e `EMAIL_FROM`. Senza chiave reset password e notifiche email finiscono solo nei log.
+- **Report AI**: chiave del provider scelto in `AI_PROVIDER`, `AI_MODEL` e `AI_API_KEY` (o dalla dashboard). Nessuna chiamata reale a un provider è stata provata in sviluppo: i test esercitano gli SDK con risposte HTTP simulate e il catalogo con lo snapshot.
+- **Telegram**: bot da @BotFather, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, `TELEGRAM_WEBHOOK_SECRET` e webhook registrato dopo il deploy. Nessun messaggio reale è stato inviato in sviluppo: i test usano una Bot API finta.
+- **OAuth GitHub** (opzionale da spec): richiede una GitHub OAuth App (client id e secret).
 - `Repository.githubId` è `Int`: gli id GitHub sono oggi intorno a 1,4 miliardi, il limite è 2,1. Passare a `BigInt` prima che diventi un problema.
 - Paginazione GitHub limitata a 10 pagine da 100 elementi per chiamata: repository con oltre 1000 issue aperte avranno metriche parziali (segnalato nei log).
-- Pulizia periodica dei refresh/reset token scaduti (job schedulato).
-- Report AI: crea una chiave presso il provider scelto e imposta `AI_PROVIDER`, `AI_MODEL` e `AI_API_KEY` (o inseriscila dalla dashboard). Nessuna chiamata reale a un provider è stata provata in sviluppo (nessuna chiave disponibile, e dal container di sviluppo models.dev non è raggiungibile): i test esercitano gli SDK con risposte HTTP simulate e il catalogo con lo snapshot.
+- Pulizia periodica dei refresh e reset token scaduti.
 - PDF: embeddare un font Unicode (es. Noto Sans) per titoli con caratteri non latini.
-- Generazione report in background (coda): oggi il report settimanale genera i report uno alla volta nel processo dell'API; con molti utenti o più istanze serve una coda di job.
-- Telegram: crea il bot con @BotFather, imposta `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME` e `TELEGRAM_WEBHOOK_SECRET` e registra il webhook dopo il deploy (vedi "Notifiche"). Nessun messaggio reale è stato inviato in sviluppo: i test usano una Bot API finta.
-- Email delle notifiche in solo testo: un template HTML e un link di disiscrizione in un clic sono il passo successivo.
-- Frontend: pagine "password dimenticata" e "reset password" (il backend le supporta, il link email punta a `/reset-password`) e collegamento GitHub via OAuth quando ci sarà la OAuth App.
-
-- Deploy (Fase 7): richiede account Railway (backend + Postgres) e Vercel (frontend) — da configurare dal maintainer.
