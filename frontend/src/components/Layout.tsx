@@ -8,6 +8,7 @@ const links = [
   { to: '/repos', label: 'Repositories', end: false },
   { to: '/reports', label: 'Reports', end: false },
   { to: '/settings/ai', label: 'AI settings', end: false },
+  { to: '/settings/notifications', label: 'Notifications', end: false },
 ];
 
 function ApiStatus() {
@@ -29,7 +30,7 @@ export function Layout() {
       <header className="border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
           <span className="font-semibold">DevOps Dashboard</span>
-          <nav aria-label="Main" className="flex gap-1">
+          <nav aria-label="Main" className="flex flex-wrap gap-1">
             {links.map((link) => (
               <NavLink
                 key={link.to}

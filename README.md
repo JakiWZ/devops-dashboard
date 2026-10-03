@@ -3,7 +3,7 @@
 Dashboard full-stack che monitora repository GitHub e genera report intelligenti con AI.
 Progetto dimostrativo sviluppato interamente con Claude Code. Specifica completa in [`SPEC.md`](SPEC.md).
 
-> **Stato:** Fase 5 (frontend) più provider AI multipli (backend) — oltre ad auth (Fase 2), integrazione GitHub con metriche giornaliere (Fase 3) e report AI (Fase 4), la dashboard React: login/registrazione, overview con KPI e grafici, pagine repository e report, filtri per data/repository/stato, dark mode, test E2E con Playwright. Notifiche e deploy arrivano nelle fasi successive.
+> **Stato:** Fase 6 (notifiche) — oltre ad auth (Fase 2), integrazione GitHub con metriche giornaliere (Fase 3), report AI con provider a scelta (Fase 4 e 3b) e dashboard React (Fase 5), ora le notifiche: report settimanale automatico e alert su CI fallite e PR bloccate, via email (Resend) e bot Telegram, con preferenze per utente (canali, cosa ricevere, giorno, ora e fuso). Il deploy arriva nella Fase 7.
 
 ## Stack
 
@@ -91,36 +91,62 @@ flowchart LR
 
 Variabili: `AI_PROVIDER` (default `anthropic`), `AI_MODEL` (default `claude-opus-5-5` per Anthropic, obbligatoria per gli altri), `AI_API_KEY`, `REPORT_EFFORT` e `REPORT_FALLBACKS` (solo Anthropic, default `high` e `true`), `REPORT_LANGUAGE` (default `English`), `REPORT_RATE_LIMIT` (generazioni per IP all'ora, default 10), `AI_KEY_CHECK_RATE_LIMIT` (verifiche di chiavi per IP ogni 15 minuti, default 20).
 
+### Notifiche
+
+Dalla pagina **Notifications** ogni utente sceglie i canali (email, Telegram), cosa ricevere (report settimanale, CI fallite, PR bloccate) e quando arriva il report (giorno, ora e fuso orario).
+
+- **Report settimanale**: lo scheduler nel processo dell'API controlla ogni `NOTIFICATION_CHECK_MINUTES` (default 5, `0` lo disattiva) chi è nella sua ora. Per ogni repository genera un report AI (chiave dell'utente o default del server) e invia riassunto e link; senza AI invia le ultime metriche. Se il server era spento nell'ora scelta, il report viene recuperato entro 24 ore, poi si aspetta la settimana dopo.
+- **Alert**: dopo ogni sync (automatico o manuale) si notificano le run CI fallite nelle ultime 24 ore e le PR aperte, non bozza, ferme da almeno 7 giorni. Ogni evento è notificato una sola volta (tabella `NotificationEvent`).
+- **Email**: usa Resend come il reset password (`RESEND_API_KEY`, `EMAIL_FROM`). Senza chiave le email finiscono solo nei log.
+- **Telegram**:
+  1. Crea un bot con [@BotFather](https://t.me/BotFather) e imposta `TELEGRAM_BOT_TOKEN` e `TELEGRAM_BOT_USERNAME` (senza `@`).
+  2. Scegli un segreto casuale per `TELEGRAM_WEBHOOK_SECRET` e registra il webhook (serve un URL pubblico HTTPS, quindi dopo il deploy o con un tunnel):
+     ```bash
+     curl "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
+       -d url=https://<backend>/api/telegram/webhook \
+       -d secret_token=$TELEGRAM_WEBHOOK_SECRET \
+       -d 'allowed_updates=["message"]'
+     ```
+  3. Nella pagina Notifications, "Connect Telegram" apre il bot con un codice monouso valido 15 minuti: premendo Start la chat viene collegata. `/stop` nel bot la scollega; se l'utente blocca il bot, la chat viene scollegata al primo invio fallito.
+
+Variabili: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, `TELEGRAM_WEBHOOK_SECRET`, `NOTIFICATION_CHECK_MINUTES` (default 5), `NOTIFICATION_TEST_RATE_LIMIT` (notifiche di prova per IP ogni 15 minuti, default 5).
+
 ## API
 
-| Metodo | Path                        | Descrizione                                                                               |
-| ------ | --------------------------- | ----------------------------------------------------------------------------------------- |
-| GET    | `/api/health`               | Stato API e database. `200` se il DB risponde, `503` (`degraded`) altrimenti              |
-| POST   | `/api/auth/register`        | `{ email, password }` → `201 { user, accessToken }` + cookie refresh                      |
-| POST   | `/api/auth/login`           | `{ email, password }` → `200 { user, accessToken }` + cookie refresh                      |
-| POST   | `/api/auth/refresh`         | Usa il cookie `refresh_token`, lo ruota e restituisce un nuovo access token               |
-| POST   | `/api/auth/logout`          | Revoca la sessione (family del refresh token) e cancella il cookie                        |
-| GET    | `/api/auth/me`              | Utente corrente (`Authorization: Bearer <accessToken>`)                                   |
-| POST   | `/api/auth/forgot-password` | `{ email }` → sempre `202`, invia il link se l'utente esiste                              |
-| POST   | `/api/auth/reset-password`  | `{ token, password }` → `204`, revoca tutte le sessioni                                   |
-| GET    | `/api/users`                | Lista utenti, solo ruolo `ADMIN`                                                          |
-| GET    | `/api/github`               | Stato del collegamento GitHub `{ configured, connected, login }`                          |
-| PUT    | `/api/github/token`         | `{ token }`: verifica il PAT su GitHub e lo salva cifrato                                 |
-| DELETE | `/api/github/token`         | Scollega GitHub (`204`)                                                                   |
-| GET    | `/api/repos`                | Repository tracciati, con l'ultima metrica                                                |
-| GET    | `/api/repos/available`      | Repository GitHub dell'utente non ancora tracciati                                        |
-| POST   | `/api/repos`                | `{ fullName: "owner/nome" }` → `201`, `409` se già tracciato                              |
-| GET    | `/api/repos/:id`            | Dettaglio con stato del sync e ultima metrica                                             |
-| DELETE | `/api/repos/:id`            | Smette di tracciare il repository (`204`)                                                 |
-| GET    | `/api/repos/:id/metrics`    | `?from=YYYY-MM-DD&to=YYYY-MM-DD` (default ultimi 30 giorni, max 366)                      |
-| POST   | `/api/repos/:id/sync`       | Sync manuale, `409` se già in corso; rate limit `SYNC_RATE_LIMIT`                         |
-| GET    | `/api/reports`              | Storico: `?repositoryId&from&to&limit&offset` → `{ reports, total }` (senza `content`)    |
-| POST   | `/api/reports`              | `{ repositoryId }` → `201 { report }`; `409` se già in generazione, `503` senza chiave AI |
-| GET    | `/api/reports/:id`          | Report completo: `content` (Markdown) e `data` (JSON strutturato)                         |
-| GET    | `/api/reports/:id/export`   | `?format=markdown\|pdf` → file allegato                                                   |
-| DELETE | `/api/reports/:id`          | Elimina il report (`204`)                                                                 |
+| Metodo | Path                               | Descrizione                                                                               |
+| ------ | ---------------------------------- | ----------------------------------------------------------------------------------------- |
+| GET    | `/api/health`                      | Stato API e database. `200` se il DB risponde, `503` (`degraded`) altrimenti              |
+| POST   | `/api/auth/register`               | `{ email, password }` → `201 { user, accessToken }` + cookie refresh                      |
+| POST   | `/api/auth/login`                  | `{ email, password }` → `200 { user, accessToken }` + cookie refresh                      |
+| POST   | `/api/auth/refresh`                | Usa il cookie `refresh_token`, lo ruota e restituisce un nuovo access token               |
+| POST   | `/api/auth/logout`                 | Revoca la sessione (family del refresh token) e cancella il cookie                        |
+| GET    | `/api/auth/me`                     | Utente corrente (`Authorization: Bearer <accessToken>`)                                   |
+| POST   | `/api/auth/forgot-password`        | `{ email }` → sempre `202`, invia il link se l'utente esiste                              |
+| POST   | `/api/auth/reset-password`         | `{ token, password }` → `204`, revoca tutte le sessioni                                   |
+| GET    | `/api/users`                       | Lista utenti, solo ruolo `ADMIN`                                                          |
+| GET    | `/api/github`                      | Stato del collegamento GitHub `{ configured, connected, login }`                          |
+| PUT    | `/api/github/token`                | `{ token }`: verifica il PAT su GitHub e lo salva cifrato                                 |
+| DELETE | `/api/github/token`                | Scollega GitHub (`204`)                                                                   |
+| GET    | `/api/repos`                       | Repository tracciati, con l'ultima metrica                                                |
+| GET    | `/api/repos/available`             | Repository GitHub dell'utente non ancora tracciati                                        |
+| POST   | `/api/repos`                       | `{ fullName: "owner/nome" }` → `201`, `409` se già tracciato                              |
+| GET    | `/api/repos/:id`                   | Dettaglio con stato del sync e ultima metrica                                             |
+| DELETE | `/api/repos/:id`                   | Smette di tracciare il repository (`204`)                                                 |
+| GET    | `/api/repos/:id/metrics`           | `?from=YYYY-MM-DD&to=YYYY-MM-DD` (default ultimi 30 giorni, max 366)                      |
+| POST   | `/api/repos/:id/sync`              | Sync manuale, `409` se già in corso; rate limit `SYNC_RATE_LIMIT`                         |
+| GET    | `/api/reports`                     | Storico: `?repositoryId&from&to&limit&offset` → `{ reports, total }` (senza `content`)    |
+| POST   | `/api/reports`                     | `{ repositoryId }` → `201 { report }`; `409` se già in generazione, `503` senza chiave AI |
+| GET    | `/api/reports/:id`                 | Report completo: `content` (Markdown) e `data` (JSON strutturato)                         |
+| GET    | `/api/reports/:id/export`          | `?format=markdown\|pdf` → file allegato                                                   |
+| DELETE | `/api/reports/:id`                 | Elimina il report (`204`)                                                                 |
+| GET    | `/api/notifications`               | Preferenze, indirizzo email e stato dei canali `{ preferences, email, telegram }`         |
+| PUT    | `/api/notifications`               | Salva le preferenze; `400` se si attiva Telegram senza chat collegata                     |
+| POST   | `/api/notifications/telegram/link` | Link `t.me` con codice monouso (15 minuti) per collegare la chat                          |
+| DELETE | `/api/notifications/telegram`      | Scollega la chat Telegram                                                                 |
+| POST   | `/api/notifications/test`          | Invia una notifica di prova sui canali attivi; rate limit `NOTIFICATION_TEST_RATE_LIMIT`  |
+| POST   | `/api/telegram/webhook`            | Webhook del bot, verificato con l'header `X-Telegram-Bot-Api-Secret-Token`                |
 
-Le route `/api/github`, `/api/repos` e `/api/reports` richiedono `Authorization: Bearer <accessToken>`; un repository o un report di un altro utente risponde `404`.
+Le route `/api/github`, `/api/repos`, `/api/reports`, `/api/ai` e `/api/notifications` richiedono `Authorization: Bearer <accessToken>`; un repository o un report di un altro utente risponde `404`.
 
 Metriche giornaliere (UTC): `openIssues` e `openPRs` sono lo stato a fine giornata, `closedIssues` e `mergedPRs` i conteggi del giorno, `ciPassRate` è `success / (success + failure)` delle run GitHub Actions create quel giorno (`null` se non ce ne sono).
 
@@ -172,6 +198,9 @@ Metriche giornaliere (UTC): `openIssues` e `openPRs` sono lo stato a fine giorna
 - **Un solo modulo `services/ai`** — è l'unico che importa SDK di provider; report e future funzioni AI chiedono il generatore per l'utente (`generatorFor`), che usa la sua chiave o il default del server. Così la scelta di provider e modello vale ovunque.
 - **Credenziali fuori dai log** — Pino oscura header `Authorization`, cookie, `Set-Cookie` e campi `apiKey`.
 - **`closedIssues` e `mergedPRs` sono conteggi giornalieri** — il seed della Fase 1 li trattava come cumulativi; ora seed e sync usano la stessa semantica, e i totali si ottengono sommando la serie.
+- **Bot Telegram via webhook con codice monouso** — l'utente apre `t.me/<bot>?start=<codice>` e il comando `/start` collega la chat: niente chat id da copiare a mano, e in DB solo l'hash del codice. Il webhook è verificato con il segreto di `setWebhook`. Alternativa scartata: long polling con `getUpdates`, che non richiede un URL pubblico ma tiene una connessione aperta per istanza e non funziona con più istanze.
+- **Alert agganciati al sync invece di un polling separato** — il sync scarica già issue, PR e run CI: gli alert riusano quei dati senza altre chiamate a GitHub, e arrivano al ritmo del sync (`SYNC_INTERVAL_MINUTES`). La deduplica usa una tabella con chiave unica per evento. Alternativa scartata: webhook GitHub, più tempestivi ma richiedono un URL pubblico e una configurazione per repository.
+- **Report settimanale nel fuso dell'utente con scheduler in-process** — giorno, ora e fuso IANA per utente; lo slot si calcola a ritroso ora per ora con `Intl`, così l'ora legale è gestita senza librerie. L'invio è "prenotato" con un update condizionato su `lastWeeklySentAt`, quindi due tick o due istanze non mandano doppioni. Alternativa scartata: un cron esterno (es. Railway cron), un servizio in più da configurare per una sola istanza.
 
 ## TODO
 
@@ -183,8 +212,9 @@ Metriche giornaliere (UTC): `openIssues` e `openPRs` sono lo stato a fine giorna
 - Pulizia periodica dei refresh/reset token scaduti (job schedulato).
 - Report AI: crea una chiave presso il provider scelto e imposta `AI_PROVIDER`, `AI_MODEL` e `AI_API_KEY` (o inseriscila dalla dashboard). Nessuna chiamata reale a un provider è stata provata in sviluppo (nessuna chiave disponibile, e dal container di sviluppo models.dev non è raggiungibile): i test esercitano gli SDK con risposte HTTP simulate e il catalogo con lo snapshot.
 - PDF: embeddare un font Unicode (es. Noto Sans) per titoli con caratteri non latini.
-- Generazione report in background (coda + polling) quando arriveranno i report schedulati della Fase 6.
-- Frontend: pagina Impostazioni → AI (scelta provider, verifica chiave, scelta modello) sopra le API `/api/ai`.
+- Generazione report in background (coda): oggi il report settimanale genera i report uno alla volta nel processo dell'API; con molti utenti o più istanze serve una coda di job.
+- Telegram: crea il bot con @BotFather, imposta `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME` e `TELEGRAM_WEBHOOK_SECRET` e registra il webhook dopo il deploy (vedi "Notifiche"). Nessun messaggio reale è stato inviato in sviluppo: i test usano una Bot API finta.
+- Email delle notifiche in solo testo: un template HTML e un link di disiscrizione in un clic sono il passo successivo.
 - Frontend: pagine "password dimenticata" e "reset password" (il backend le supporta, il link email punta a `/reset-password`) e collegamento GitHub via OAuth quando ci sarà la OAuth App.
 
 - Deploy (Fase 7): richiede account Railway (backend + Postgres) e Vercel (frontend) — da configurare dal maintainer.

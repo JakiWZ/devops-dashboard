@@ -45,6 +45,16 @@ const envSchema = z.object({
   SECRETS_ENC_KEY: encryptionKey,
   // Nome storico di SECRETS_ENC_KEY, ancora accettato.
   GITHUB_TOKEN_ENC_KEY: encryptionKey,
+  // Bot Telegram per le notifiche (token da @BotFather). Senza token il canale Telegram è spento.
+  TELEGRAM_BOT_TOKEN: optionalString,
+  // Username del bot senza @, per costruire il link t.me usato per collegare la chat.
+  TELEGRAM_BOT_USERNAME: optionalString,
+  // Segreto che Telegram rimanda nell'header X-Telegram-Bot-Api-Secret-Token del webhook.
+  TELEGRAM_WEBHOOK_SECRET: optionalString,
+  // Ogni quanti minuti lo scheduler controlla i report settimanali da inviare; 0 lo disattiva.
+  NOTIFICATION_CHECK_MINUTES: z.coerce.number().int().min(0).default(5),
+  // Notifiche di prova per IP ogni 15 minuti.
+  NOTIFICATION_TEST_RATE_LIMIT: z.coerce.number().int().positive().default(5),
   // Intervallo del sync automatico dei repository; 0 lo disattiva.
   SYNC_INTERVAL_MINUTES: z.coerce.number().int().min(0).default(360),
   SYNC_RATE_LIMIT: z.coerce.number().int().positive().default(10),

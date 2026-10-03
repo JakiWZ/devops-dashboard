@@ -95,3 +95,12 @@ export function runFixture(overrides: Partial<GitHubWorkflowRun> = {}): GitHubWo
     ...overrides,
   };
 }
+
+export class FakeTelegram {
+  readonly sent: Array<{ chatId: string; text: string }> = [];
+  fail: Error | null = null;
+  async sendMessage(chatId: string, text: string): Promise<void> {
+    if (this.fail) throw this.fail;
+    this.sent.push({ chatId, text });
+  }
+}

@@ -8,12 +8,16 @@ import {
   availableReposSchema,
   githubStatusSchema,
   metricsRangeSchema,
+  notificationSettingsSchema,
   reportListSchema,
   reportResponseSchema,
   repositoryListSchema,
   repositoryResponseSchema,
   sessionSchema,
+  telegramLinkSchema,
+  testNotificationSchema,
   userSchema,
+  type NotificationPreferences,
 } from './schemas';
 
 export interface Credentials {
@@ -114,4 +118,15 @@ export const aiApi = {
   setModel: (model: string) =>
     requestJson('/api/ai/credential', aiSettingsSchema, { method: 'PATCH', body: { model } }),
   remove: () => request('/api/ai/credential', { method: 'DELETE' }),
+};
+
+export const notificationsApi = {
+  settings: () => requestJson('/api/notifications', notificationSettingsSchema),
+  save: (body: NotificationPreferences) =>
+    requestJson('/api/notifications', notificationSettingsSchema, { method: 'PUT', body }),
+  telegramLink: () =>
+    requestJson('/api/notifications/telegram/link', telegramLinkSchema, { method: 'POST' }),
+  disconnectTelegram: () =>
+    requestJson('/api/notifications/telegram', notificationSettingsSchema, { method: 'DELETE' }),
+  test: () => requestJson('/api/notifications/test', testNotificationSchema, { method: 'POST' }),
 };

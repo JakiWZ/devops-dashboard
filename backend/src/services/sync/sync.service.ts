@@ -1,7 +1,7 @@
 import type { PrismaClient, Repository } from '@prisma/client';
 import { HttpError } from '../../lib/http-error.js';
 import { logger } from '../../lib/logger.js';
-import type { GitHubClient } from '../github/github.types.js';
+import type { GitHubClient, GitHubIssue, GitHubWorkflowRun } from '../github/github.types.js';
 import { addDays, computeDailyMetrics, daysBetween, startOfUtcDay } from './metrics.js';
 
 /** Giorni ricostruiti al primo sync (e tetto massimo per i sync successivi). */
@@ -10,6 +10,12 @@ export const BACKFILL_DAYS = 30;
 const STALE_LOCK_MS = 15 * 60 * 1000;
 
 export type ClientForUser = (userId: string) => Promise<GitHubClient>;
+
+/** Riceve i dati appena scaricati da GitHub (es. per gli alert); un suo errore non fa fallire il sync. */
+export type SyncListener = (
+  repository: Repository,
+  data: { open: GitHubIssue[]; runs: GitHubWorkflowRun[] },
+) => Promise<void>;
 
 export interface SyncResult {
   repository: Repository;
@@ -21,6 +27,7 @@ export class RepoSyncService {
     private readonly db: PrismaClient,
     private readonly clientFor: ClientForUser,
     private readonly now: () => Date = () => new Date(),
+    private readonly listener: SyncListener | null = null,
   ) {}
 
   async sync(repositoryId: string): Promise<SyncResult> {
@@ -64,6 +71,11 @@ export class RepoSyncService {
       });
 
       logger.info({ repositoryId, days: metrics.length }, 'Repository synced');
+      if (this.listener) {
+        await this.listener(repository, { open, runs }).catch((err: unknown) => {
+          logger.warn({ err, repositoryId }, 'Sync listener failed');
+        });
+      }
       return { repository, daysUpdated: metrics.length };
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';

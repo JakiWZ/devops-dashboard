@@ -31,6 +31,44 @@ model User {
   refreshTokens       RefreshToken[]
   passwordResetTokens PasswordResetToken[]
   aiCredential        AiCredential?
+  notificationPrefs   NotificationPreference?
+  notificationEvents  NotificationEvent[]
+}
+
+// Cosa ricevere, dove e quando. Senza riga valgono i default (tutto spento).
+model NotificationPreference {
+  id                 String    @id @default(cuid())
+  userId             String    @unique
+  emailEnabled       Boolean   @default(false)
+  telegramEnabled    Boolean   @default(false)
+  // Chat Telegram collegata tramite il comando /start del bot (null se non collegata).
+  telegramChatId     String?
+  // Codice monouso per collegare Telegram: in DB solo l'hash SHA-256.
+  telegramLinkHash   String?   @unique
+  telegramLinkExpiry DateTime?
+  weeklyReport       Boolean   @default(true)
+  ciFailureAlerts    Boolean   @default(true)
+  stalledPrAlerts    Boolean   @default(true)
+  // Giorno (0 = domenica) e ora locali del report settimanale, nel fuso `timezone` (IANA).
+  weeklyDay          Int       @default(1)
+  weeklyHour         Int       @default(8)
+  timezone           String    @default("UTC")
+  lastWeeklySentAt   DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Alert già inviati: la chiave (es. URL della run CI fallita) evita di notificare due volte.
+model NotificationEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  key       String
+  kind      String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
 }
 
 // Chiave AI dell'utente per un provider del catalogo models.dev; senza, vale il default del server.
