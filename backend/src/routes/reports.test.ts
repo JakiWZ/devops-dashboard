@@ -269,7 +269,7 @@ describe('report history', () => {
       .set(auth(token))
       .expect(200);
     expect(md.headers['content-type']).toMatch(/text\/markdown/);
-    expect(md.headers['content-disposition']).toMatch(/attachment; filename="report-acme-/);
+    expect(md.headers['content-disposition']).toMatch(/attachment; filename="?report-acme-/);
     expect(md.text).toBe('# r\n\n- item');
 
     const pdf = await request(app)

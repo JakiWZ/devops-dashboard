@@ -411,3 +411,7 @@ Cose che richiedono un account o una chiave del maintainer, o limiti noti:
 - Paginazione GitHub limitata a 10 pagine da 100 elementi per chiamata: repository con oltre 1000 issue aperte avranno metriche parziali (segnalato nei log).
 - Pulizia periodica dei refresh e reset token scaduti.
 - PDF: embeddare un font Unicode (es. Noto Sans) per titoli con caratteri non latini.
+
+## Licenza
+
+[MIT](LICENSE).

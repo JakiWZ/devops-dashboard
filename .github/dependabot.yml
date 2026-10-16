@@ -6,6 +6,10 @@ updates:
     directory: /backend
     schedule:
       interval: weekly
+    # TypeScript resta sulla 5.9 finché ts-jest e typescript-eslint non supportano la versione successiva.
+    ignore:
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
     groups:
       minor-and-patch:
         update-types: [minor, patch]
@@ -13,6 +17,10 @@ updates:
     directory: /frontend
     schedule:
       interval: weekly
+    # TypeScript resta sulla 5.9 finché ts-jest e typescript-eslint non supportano la versione successiva.
+    ignore:
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
     groups:
       minor-and-patch:
         update-types: [minor, patch]
