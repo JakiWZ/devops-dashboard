@@ -392,7 +392,6 @@ Metriche giornaliere (UTC): `openIssues` e `openPRs` sono lo stato a fine giorna
 - Login con GitHub OAuth al posto del token personale.
 - Webhook GitHub per metriche e alert in tempo reale, senza aspettare il sync.
 - Coda di job (BullMQ) per generazione dei report e report settimanali, con worker separato.
-- Pagine frontend per password dimenticata e reset (il backend le supporta già).
 - Email HTML con link di disiscrizione in un clic; altri canali (Slack, Discord).
 - Metriche aggiuntive: lead time delle PR, tempo di prima risposta alle issue, durata delle run CI.
 - Supporto a GitLab e Bitbucket dietro la stessa interfaccia `GitHubClient`.
