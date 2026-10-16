@@ -4,6 +4,8 @@ name: Deploy
 # nel preDeployCommand di backend/railway.json), poi il frontend su Vercel.
 # Ogni job si salta da solo, con un avviso, finché i segreti del repository non sono configurati
 # (vedi README, "Deploy").
+# Le CLI di Railway e Vercel sono fissate a una versione (da aggiornare a mano): una release
+# nuova non deve poter rompere il deploy senza passare da una PR.
 
 on:
   workflow_run:
@@ -48,7 +50,7 @@ jobs:
       - name: Deploy to Railway
         if: steps.config.outputs.enabled == 'true'
         working-directory: backend
-        run: npx --yes @railway/cli up --ci --service "$RAILWAY_SERVICE"
+        run: npx --yes @railway/cli@5.69.0 up --ci --service "$RAILWAY_SERVICE"
 
   frontend:
     needs: backend
@@ -77,6 +79,6 @@ jobs:
         # Dalla radice del repository: il progetto Vercel ha Root Directory = frontend, dove trova
         # vercel.json. VITE_API_URL arriva dalle variabili d'ambiente del progetto (Production).
         run: |
-          npx --yes vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
-          npx --yes vercel build --prod --token="$VERCEL_TOKEN"
-          npx --yes vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+          npx --yes vercel@64.3.1 pull --yes --environment=production --token="$VERCEL_TOKEN"
+          npx --yes vercel@64.3.1 build --prod --token="$VERCEL_TOKEN"
+          npx --yes vercel@64.3.1 deploy --prebuilt --prod --token="$VERCEL_TOKEN"
