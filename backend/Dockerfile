@@ -1,7 +1,7 @@
 # Immagine di produzione del backend (usata da Railway, funziona con qualunque host Docker).
 # Build: docker build -t devops-dashboard-api backend/
 
-FROM node:22-slim AS base
+FROM node:25-slim AS base
 # OpenSSL per il motore delle migrazioni di Prisma; il client usa il driver `pg` (Prisma 7).
 RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \
   && rm -rf /var/lib/apt/lists/*
