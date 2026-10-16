@@ -22,9 +22,6 @@
     "prisma:deploy": "prisma migrate deploy",
     "db:seed": "prisma db seed"
   },
-  "prisma": {
-    "seed": "tsx prisma/seed.ts"
-  },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.71",
     "@ai-sdk/google": "^4.0.87",
@@ -39,7 +36,8 @@
     "@octokit/request-error": "^7.1.2",
     "@octokit/rest": "^22.0.1",
     "@opencode-ai/models": "^0.0.92",
-    "@prisma/client": "^6.19.3",
+    "@prisma/adapter-pg": "^7.10.1",
+    "@prisma/client": "^7.10.1",
     "ai": "^7.0.127",
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
@@ -53,7 +51,7 @@
     "pdfkit": "^0.20.2",
     "pino": "^10.3.1",
     "pino-http": "^11.0.0",
-    "prisma": "^6.19.3",
+    "prisma": "^7.10.1",
     "resend": "^6.32.0",
     "zod": "^4.6.5"
   },

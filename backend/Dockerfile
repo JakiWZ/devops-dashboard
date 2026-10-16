@@ -2,7 +2,7 @@
 # Build: docker build -t devops-dashboard-api backend/
 
 FROM node:22-slim AS base
-# Prisma richiede OpenSSL per il motore delle query.
+# OpenSSL per il motore delle migrazioni di Prisma; il client usa il driver `pg` (Prisma 7).
 RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
@@ -10,6 +10,7 @@ WORKDIR /app
 FROM base AS build
 COPY package.json package-lock.json ./
 RUN npm ci
+COPY prisma.config.ts ./
 COPY prisma ./prisma
 RUN npx prisma generate
 COPY tsconfig.json tsconfig.build.json ./
@@ -21,6 +22,7 @@ ENV NODE_ENV=production
 COPY package.json package-lock.json ./
 # Solo le dipendenze di produzione; il CLI prisma resta per `prisma migrate deploy`.
 RUN npm ci --omit=dev && npm cache clean --force
+COPY prisma.config.ts ./
 COPY prisma ./prisma
 RUN npx prisma generate
 COPY --from=build /app/dist ./dist
