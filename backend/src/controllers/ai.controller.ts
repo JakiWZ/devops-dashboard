@@ -1,6 +1,6 @@
 import type { Request, RequestHandler } from 'express';
 import { HttpError } from '../lib/http-error.js';
-import type { SaveCredentialInput, SetModelInput, VerifyKeyInput } from '../routes/ai.schemas.js';
+import { saveCredentialSchema, setModelSchema, verifyKeySchema } from '../routes/ai.schemas.js';
 import type { AiSettingsService } from '../services/ai/ai-settings.service.js';
 
 function userId(req: Request): string {
@@ -20,7 +20,7 @@ export function aiController(ai: AiSettingsService) {
   };
 
   const verify: RequestHandler = async (req, res) => {
-    const { provider, apiKey } = req.body as VerifyKeyInput;
+    const { provider, apiKey } = verifyKeySchema.parse(req.body);
     res.json({ valid: true, models: await ai.verify(provider, apiKey) });
   };
 
@@ -29,11 +29,11 @@ export function aiController(ai: AiSettingsService) {
   };
 
   const save: RequestHandler = async (req, res) => {
-    res.json(await ai.save(userId(req), req.body as SaveCredentialInput));
+    res.json(await ai.save(userId(req), saveCredentialSchema.parse(req.body)));
   };
 
   const setModel: RequestHandler = async (req, res) => {
-    const { model } = req.body as SetModelInput;
+    const { model } = setModelSchema.parse(req.body);
     res.json(await ai.setModel(userId(req), model));
   };
 

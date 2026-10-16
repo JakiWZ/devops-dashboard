@@ -86,7 +86,16 @@ function CurrentSettings({ settings, onChange }: { settings: AiSettings; onChang
             className="rounded-md border border-slate-300 bg-white px-2 py-1 dark:border-slate-700 dark:bg-slate-900"
           >
             {(
-              models.data?.models ?? [{ id: credential.model, name: credential.model } as AiModel]
+              models.data?.models ?? [
+                {
+                  id: credential.model,
+                  name: credential.model,
+                  reasoning: false,
+                  contextWindow: null,
+                  cost: null,
+                  releaseDate: null,
+                },
+              ]
             ).map((model) => (
               <option key={model.id} value={model.id}>
                 {model.name}

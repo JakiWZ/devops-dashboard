@@ -2,7 +2,12 @@ import type { CookieOptions, Request, RequestHandler, Response } from 'express';
 import { env } from '../config/env.js';
 import { HttpError } from '../lib/http-error.js';
 import type { AuthService, Session } from '../services/auth.service.js';
-import type { Credentials, ResetPasswordInput } from '../routes/auth.schemas.js';
+import {
+  credentialsSchema,
+  forgotPasswordSchema,
+  loginSchema,
+  resetPasswordSchema,
+} from '../routes/auth.schemas.js';
 
 export const REFRESH_COOKIE = 'refresh_token';
 
@@ -32,12 +37,12 @@ function readRefreshCookie(req: Request): string | undefined {
 
 export function authController(auth: AuthService) {
   const register: RequestHandler = async (req, res) => {
-    const { email, password } = req.body as Credentials;
+    const { email, password } = credentialsSchema.parse(req.body);
     sendSession(res, await auth.register(email, password), 201);
   };
 
   const login: RequestHandler = async (req, res) => {
-    const { email, password } = req.body as Credentials;
+    const { email, password } = loginSchema.parse(req.body);
     sendSession(res, await auth.login(email, password));
   };
 
@@ -65,13 +70,13 @@ export function authController(auth: AuthService) {
   };
 
   const forgotPassword: RequestHandler = async (req, res) => {
-    const { email } = req.body as { email: string };
+    const { email } = forgotPasswordSchema.parse(req.body);
     await auth.requestPasswordReset(email);
     res.status(202).json({ message: 'If the email is registered, a reset link has been sent' });
   };
 
   const resetPassword: RequestHandler = async (req, res) => {
-    const { token, password } = req.body as ResetPasswordInput;
+    const { token, password } = resetPasswordSchema.parse(req.body);
     await auth.resetPassword(token, password);
     res.status(204).end();
   };

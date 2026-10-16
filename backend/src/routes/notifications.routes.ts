@@ -5,9 +5,7 @@ import { env } from '../config/env.js';
 import { notificationsController } from '../controllers/notifications.controller.js';
 import { HttpError } from '../lib/http-error.js';
 import { requireAuth } from '../middleware/auth.js';
-import { validateBody } from '../middleware/validate.js';
 import type { NotificationService } from '../services/notifications/notification.service.js';
-import { preferencesSchema } from './notifications.schemas.js';
 
 export function notificationsRouter(notifications: NotificationService): Router {
   const router = Router();
@@ -22,7 +20,7 @@ export function notificationsRouter(notifications: NotificationService): Router 
   router.use(requireAuth);
 
   router.get('/', c.settings);
-  router.put('/', validateBody(preferencesSchema), c.update);
+  router.put('/', c.update);
   router.post('/telegram/link', c.telegramLink);
   router.delete('/telegram', c.telegramDisconnect);
   router.post('/test', testLimit, c.test);

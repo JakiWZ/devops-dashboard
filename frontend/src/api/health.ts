@@ -1,27 +1,20 @@
+import { z } from 'zod/mini';
 import { API_URL } from './http';
 
-export interface HealthResponse {
-  status: 'ok' | 'degraded';
-  uptime: number;
-  timestamp: string;
-  database: 'up' | 'down';
-}
+const healthResponseSchema = z.object({
+  status: z.enum(['ok', 'degraded']),
+  uptime: z.number(),
+  timestamp: z.string(),
+  database: z.enum(['up', 'down']),
+});
 
-function isHealthResponse(value: unknown): value is HealthResponse {
-  if (typeof value !== 'object' || value === null) return false;
-  const v = value as Record<string, unknown>;
-  return (
-    (v.status === 'ok' || v.status === 'degraded') &&
-    typeof v.uptime === 'number' &&
-    typeof v.timestamp === 'string' &&
-    (v.database === 'up' || v.database === 'down')
-  );
-}
+export type HealthResponse = z.infer<typeof healthResponseSchema>;
 
 export async function fetchHealth(signal?: AbortSignal): Promise<HealthResponse> {
   const res = await fetch(`${API_URL}/api/health`, { signal });
   // 503 è una risposta valida (stato "degraded"): la consideriamo un esito, non un errore di rete.
   const body: unknown = await res.json();
-  if (!isHealthResponse(body)) throw new Error(`Unexpected health response (HTTP ${res.status})`);
-  return body;
+  const parsed = healthResponseSchema.safeParse(body);
+  if (!parsed.success) throw new Error(`Unexpected health response (HTTP ${res.status})`);
+  return parsed.data;
 }

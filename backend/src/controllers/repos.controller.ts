@@ -1,10 +1,10 @@
 import type { Request, RequestHandler } from 'express';
 import { HttpError } from '../lib/http-error.js';
 import {
+  githubTokenSchema,
+  trackRepoSchema,
   MAX_METRICS_RANGE_DAYS,
   metricsQuerySchema,
-  type GitHubTokenInput,
-  type TrackRepoInput,
 } from '../routes/repos.schemas.js';
 import type { GitHubAccountService } from '../services/github/github-account.service.js';
 import type { RepoService } from '../services/repos.service.js';
@@ -27,7 +27,7 @@ export function githubController(github: GitHubAccountService) {
   };
 
   const connect: RequestHandler = async (req, res) => {
-    const { token } = req.body as GitHubTokenInput;
+    const { token } = githubTokenSchema.parse(req.body);
     res.json(await github.connect(userId(req), token));
   };
 
@@ -49,7 +49,7 @@ export function reposController(repos: RepoService, sync: RepoSyncService) {
   };
 
   const track: RequestHandler = async (req, res) => {
-    const { fullName } = req.body as TrackRepoInput;
+    const { fullName } = trackRepoSchema.parse(req.body);
     res.status(201).json({ repository: await repos.track(userId(req), fullName) });
   };
 

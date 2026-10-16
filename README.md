@@ -77,6 +77,9 @@ frontend/   React + Vite        src/{api,auth,components,pages,hooks,lib}, e2e/ 
 backend/    Express + Prisma    src/{routes,controllers,services,middleware,lib,config}, prisma/, Dockerfile, railway.json
 .github/workflows/  ci.yml (verifiche su ogni push), deploy.yml (deploy dopo una CI verde su main)
 docs/screenshots/   immagini di questo README
+docs/requisiti.md   stato di ogni requisito di SPEC.md
+docs/piani/         piani delle parti più grandi, scritti prima di implementarle
+AGENTS.md, CLAUDE.md  istruzioni per gli agenti di sviluppo
 ```
 
 ## Setup locale
@@ -99,7 +102,7 @@ npm install
 npm run dev                   # http://localhost:5173 (proxy /api -> :4000)
 ```
 
-In ogni package: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`.
+Verifica completa dalla radice: `npm run check` (lint, typecheck, test e build di backend e frontend, lo stesso comando della CI). In ogni package ci sono anche i singoli `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`.
 
 Per provare l'immagine di produzione del backend: `docker build -t devops-dashboard-api backend`, poi `docker run --env-file backend/.env -e NODE_ENV=production -p 4000:4000 devops-dashboard-api` (con un `DATABASE_URL` raggiungibile dal container).
 
@@ -328,6 +331,8 @@ Metriche giornaliere (UTC): `openIssues` e `openPRs` sono lo stato a fine giorna
 - **Report settimanale nel fuso dell'utente con scheduler in-process** — giorno, ora e fuso IANA per utente; lo slot si calcola a ritroso ora per ora con `Intl`, così l'ora legale è gestita senza librerie. L'invio è "prenotato" con un update condizionato su `lastWeeklySentAt`, quindi due tick o due istanze non mandano doppioni. Alternativa scartata: un cron esterno (es. Railway cron), un servizio in più da configurare per una sola istanza.
 - **Immagine Docker per Railway invece del build automatico (Nixpacks/Railpack)** — stesso artefatto verificato in CI e in produzione, Node 22 e OpenSSL fissati, build multi-stage con le sole dipendenze di produzione e utente non root. `prisma` sta tra le dipendenze perché `migrate deploy` gira nell'immagine prima di ogni rilascio. Alternativa scartata: il builder automatico, più comodo ma non riproducibile in locale né in CI.
 - **Deploy da GitHub Actions dopo la CI verde, non dalle integrazioni Git delle piattaforme** — Railway e Vercel deployerebbero a ogni push, anche con i test rossi; con `workflow_run` il deploy parte solo da una CI riuscita su `main`, prima il backend (con le migrazioni) e poi il frontend. Alternativa scartata: integrazioni Git native, più semplici ma senza il vincolo sulla CI.
+- **Body delle richieste validati nel controller con `schema.parse`, senza cast** — prima un middleware validava e il controller rileggeva `req.body as Tipo`: corretto a runtime, ma il tipo non era legato allo schema. Ora il tipo nasce dal parsing e un errore Zod diventa comunque `400` nel middleware centrale. I cast `as` rimasti sono due, su dati interni e commentati.
+- **Un comando `npm run check` alla radice, usato anche dalla CI** — l'equivalente leggero di uno `xtask`: chi lavora sul repo (persona o agente) verifica tutto con un comando, lo stesso che gira in CI. Alternativa scartata: npm workspaces, che cambierebbero lockfile e Dockerfile per un guadagno piccolo.
 - **Versioni fissate e Dependabot invece di `latest`** — le CLI di Railway e Vercel nel workflow di deploy hanno una versione precisa (una release di `@railway/cli` ha già rotto i deploy con token di progetto), e Dependabot apre ogni settimana PR raggruppate per npm, GitHub Actions e immagine Docker, che passano dalla CI come ogni modifica. Il `GITHUB_TOKEN` dei workflow ha solo `contents: read`. Alternativa scartata: azioni fissate per SHA, più sicure contro un tag spostato ma superflue con sole azioni ufficiali di GitHub.
 - **Migrazioni nel `preDeployCommand` di Railway invece che all'avvio del server** — se una migrazione fallisce la versione nuova non parte e resta online la precedente; all'avvio, ogni replica proverebbe a migrare e un errore manderebbe il servizio in crash loop.
 - **`VITE_API_URL` verso l'API invece di un rewrite `/api` su Vercel** — i rewrite esterni di Vercel hanno un timeout più corto della generazione di un report (30-90 s) e l'URL di Railway non si conosce quando si scrive `vercel.json`. Il prezzo è il cookie cross-site (vedi "Trade-off").

@@ -50,10 +50,8 @@ jobs:
         run: |
           PGPASSWORD=ci psql -h localhost -U ci -d postgres -c 'CREATE DATABASE devops_dashboard_test'
           DATABASE_URL=$TEST_DATABASE_URL npx prisma migrate deploy
-      - run: npm run lint
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm run build
+      # Stesso comando che si usa in locale: lint, typecheck, test e build.
+      - run: npm run check
 
   frontend:
     runs-on: ubuntu-latest
@@ -68,10 +66,7 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
-      - run: npm run lint
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm run build
+      - run: npm run check
 
   e2e:
     # Flussi utente nel browser contro backend e database veri, con i dati del seed.
