@@ -36,7 +36,7 @@ jobs:
       JWT_ACCESS_SECRET: ci-only-secret-ci-only-secret-ci-only-secret
       NODE_ENV: test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
@@ -59,7 +59,7 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
@@ -87,7 +87,7 @@ jobs:
       # Segreto fittizio valido solo per i test in CI.
       JWT_ACCESS_SECRET: ci-only-secret-ci-only-secret-ci-only-secret
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
@@ -132,7 +132,7 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U ci" --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build image
         run: docker build -t devops-dashboard-api backend
       - name: Run migrations from the image
