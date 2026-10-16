@@ -9,7 +9,7 @@ Legenda: ✅ fatto · ⚠️ fatto in parte o con una deviazione motivata · ⏳
 | -------------------------------------------- | ----- | ----------------------------------------------------------------------- |
 | Login e registrazione email + password (JWT) | ✅    | `backend/src/services/auth.service.ts`, `AuthPage`                      |
 | OAuth GitHub (opzionale)                     | ❌    | Serve una GitHub OAuth App; oggi token personale cifrato (README, TODO) |
-| Password reset via email                     | ⚠️    | Backend completo; mancano le pagine frontend (Roadmap)                  |
+| Password reset via email                     | ✅    | `auth.service.ts`, pagine `/forgot-password` e `/reset-password`        |
 | Ruoli admin/user                             | ✅    | `requireRole`, `GET /api/users` solo ADMIN                              |
 | Sessioni persistenti (refresh token)         | ✅    | Refresh token ruotati, hash in DB, revoca per family                    |
 

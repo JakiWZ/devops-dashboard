@@ -47,6 +47,10 @@ export const authApi = {
     requestJson('/api/auth/register', sessionSchema, { method: 'POST', body }),
   logout: () => request('/api/auth/logout', { method: 'POST' }),
   me: () => requestJson('/api/auth/me', z.object({ user: userSchema })),
+  forgotPassword: (email: string) =>
+    request('/api/auth/forgot-password', { method: 'POST', body: { email } }),
+  resetPassword: (body: { token: string; password: string }) =>
+    request('/api/auth/reset-password', { method: 'POST', body }),
 };
 
 export const githubApi = {

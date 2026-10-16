@@ -2,12 +2,15 @@ import type { RouteObject } from 'react-router';
 import { RequireAuth } from './auth/RequireAuth';
 import { Layout } from './components/Layout';
 import { AuthPage } from './pages/AuthPage';
+import { ForgotPasswordPage, ResetPasswordPage } from './pages/PasswordResetPages';
 import { NotFoundPage } from './pages/NotFoundPage';
 
 // Pagine caricate on demand: Recharts e il renderer Markdown non pesano sulla pagina di login.
 export const routes: RouteObject[] = [
   { path: '/login', element: <AuthPage mode="login" /> },
   { path: '/register', element: <AuthPage mode="register" /> },
+  { path: '/forgot-password', element: <ForgotPasswordPage /> },
+  { path: '/reset-password', element: <ResetPasswordPage /> },
   {
     element: <RequireAuth />,
     children: [

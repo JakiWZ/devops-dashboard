@@ -43,3 +43,24 @@ test.describe('login flow', () => {
     await expect(page.getByText('No repositories tracked yet')).toBeVisible();
   });
 });
+
+test.describe('password reset', () => {
+  test('requests a reset link without revealing whether the account exists', async ({ page }) => {
+    await page.goto('/login');
+    await page.getByRole('link', { name: 'Forgot your password?' }).click();
+    await expect(page).toHaveURL(/\/forgot-password$/);
+    await page.getByLabel('Email').fill(DEMO_USER.email);
+    await page.getByRole('button', { name: 'Send reset link' }).click();
+    await expect(page.getByRole('status')).toContainText('If an account exists');
+  });
+
+  test('rejects an invalid link and offers a new one', async ({ page }) => {
+    await page.goto('/reset-password?token=not-a-real-token');
+    await page.getByLabel('New password').fill('a-long-password');
+    await page.getByLabel('Confirm password').fill('a-long-password');
+    await page.getByRole('button', { name: 'Change password' }).click();
+    await expect(page.getByRole('alert')).toHaveText('Invalid or expired reset token');
+    await page.getByRole('link', { name: 'Request a new link' }).click();
+    await expect(page).toHaveURL(/\/forgot-password$/);
+  });
+});
