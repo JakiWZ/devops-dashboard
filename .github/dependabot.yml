@@ -24,3 +24,7 @@ updates:
     directory: /backend
     schedule:
       interval: weekly
+    # Node resta sulla linea LTS (22, come .nvmrc e la CI): il salto di versione maggiore si fa a mano.
+    ignore:
+      - dependency-name: node
+        update-types: [version-update:semver-major]

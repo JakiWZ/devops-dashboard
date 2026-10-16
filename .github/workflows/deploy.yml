@@ -46,7 +46,7 @@ jobs:
       - uses: actions/setup-node@v4
         if: steps.config.outputs.enabled == 'true'
         with:
-          node-version: 22
+          node-version-file: .nvmrc
       - name: Deploy to Railway
         if: steps.config.outputs.enabled == 'true'
         working-directory: backend

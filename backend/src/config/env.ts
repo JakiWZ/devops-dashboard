@@ -119,6 +119,15 @@ export function parseEnv(source: NodeJS.ProcessEnv): Env {
       .join('; ');
     throw new Error(`Invalid environment variables: ${issues}`);
   }
+  // Il segnaposto di .env.example supera i 32 caratteri: in produzione renderebbe i JWT falsificabili.
+  if (
+    result.data.NODE_ENV === 'production' &&
+    result.data.JWT_ACCESS_SECRET.startsWith('change-me')
+  ) {
+    throw new Error(
+      'Invalid environment variables: JWT_ACCESS_SECRET: replace the .env.example placeholder',
+    );
+  }
   return {
     ...result.data,
     secretsKey: result.data.SECRETS_ENC_KEY ?? result.data.GITHUB_TOKEN_ENC_KEY,

@@ -44,3 +44,19 @@ describe('AI defaults from the environment', () => {
     expect(parseEnv({ ...base, GITHUB_TOKEN_ENC_KEY: key }).secretsKey).toBe(key);
   });
 });
+
+describe('JWT secret', () => {
+  const placeholder = 'change-me-to-a-random-string-of-at-least-32-chars';
+
+  it('rejects the .env.example placeholder in production', () => {
+    expect(() =>
+      parseEnv({ ...base, NODE_ENV: 'production', JWT_ACCESS_SECRET: placeholder }),
+    ).toThrow(/JWT_ACCESS_SECRET/);
+  });
+
+  it('accepts the placeholder outside production', () => {
+    expect(parseEnv({ ...base, JWT_ACCESS_SECRET: placeholder }).JWT_ACCESS_SECRET).toBe(
+      placeholder,
+    );
+  });
+});

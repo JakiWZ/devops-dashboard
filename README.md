@@ -366,6 +366,7 @@ Metriche giornaliere (UTC): `openIssues` e `openPRs` sono lo stato a fine giorna
 - **zod/mini nel frontend** — stessa validazione delle risposte con l'API funzionale di Zod 4, che il bundler riesce ad alleggerire: il bundle iniziale è sceso di circa 67 kB (18 kB compressi). Il backend resta su Zod classico, dove il peso non conta.
 - **Grafici montati uno per task e solo vicino al viewport** — Recharts disegna in modo sincrono e cinque grafici insieme bloccavano il main thread per ~300 ms su mobile. Con un segnaposto della stessa altezza (niente layout shift) e una coda condivisa il Total Blocking Time della Overview è sceso da ~400 a ~170 ms. Alternativa scartata: grafici in canvas, più veloci ma meno accessibili e da riscrivere.
 - **Guscio statico in `index.html` e `scrollbar-gutter: stable`** — il nome dell'app compare prima che arrivi il JavaScript (First Contentful Paint mobile da 2,2 a 1,5 s), e la comparsa della scrollbar quando arrivano i dati non sposta più il contenuto centrato.
+- **Node 22 LTS fissato in `.nvmrc`** — CI, deploy e `engines` leggono la stessa versione, e Dependabot non propone i salti di versione maggiore dell'immagine Docker (es. Node 25, non LTS): il passaggio alla prossima LTS si fa a mano. Scartato: seguire l'ultima versione di Node, che porterebbe in produzione release a supporto breve.
 
 ## Trade-off
 
