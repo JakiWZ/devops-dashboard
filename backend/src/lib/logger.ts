@@ -1,4 +1,4 @@
-import { pino } from 'pino';
+import { destination, pino } from 'pino';
 import { env } from '../config/env.js';
 
 // Credenziali mai nei log: token di accesso, cookie di refresh e chiavi API dei provider AI.
@@ -15,10 +15,12 @@ export const redact = {
   censor: '[redacted]',
 };
 
-export const logger = pino({
-  level: env.NODE_ENV === 'test' ? 'silent' : env.LOG_LEVEL,
-  redact,
-  ...(env.NODE_ENV === 'development' && {
-    transport: { target: 'pino-pretty', options: { colorize: true } },
-  }),
-});
+export const logger = env.LOG_STDERR
+  ? pino({ level: env.LOG_LEVEL, redact }, destination(2))
+  : pino({
+      level: env.NODE_ENV === 'test' ? 'silent' : env.LOG_LEVEL,
+      redact,
+      ...(env.NODE_ENV === 'development' && {
+        transport: { target: 'pino-pretty', options: { colorize: true } },
+      }),
+    });

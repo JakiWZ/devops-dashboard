@@ -79,7 +79,7 @@ backend/    Express + Prisma    src/{routes,controllers,services,middleware,lib,
 docs/screenshots/   immagini di questo README
 docs/requisiti.md   stato di ogni requisito di SPEC.md
 docs/piani/         piani delle parti più grandi, scritti prima di implementarle
-AGENTS.md, CLAUDE.md  istruzioni per gli agenti di sviluppo
+AGENTS.md, CLAUDE.md  istruzioni per gli agenti di sviluppo (server MCP in backend/src/mcp/)
 ```
 
 ## Setup locale
@@ -171,6 +171,32 @@ Dalla pagina **Notifications** ogni utente sceglie i canali (email, Telegram), c
   3. Nella pagina Notifications, "Connect Telegram" apre il bot con un codice monouso valido 15 minuti: premendo Start la chat viene collegata. `/stop` nel bot la scollega; se l'utente blocca il bot, la chat viene scollegata al primo invio fallito.
 
 Variabili: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, `TELEGRAM_WEBHOOK_SECRET`, `NOTIFICATION_CHECK_MINUTES` (default 5), `NOTIFICATION_TEST_RATE_LIMIT` (notifiche di prova per IP ogni 15 minuti, default 5).
+
+### Agenti e MCP
+
+Il backend espone anche un server [MCP](https://modelcontextprotocol.io) sugli stessi servizi dell'API, così un agente (Claude Code, Codex, Cursor...) può leggere repository, metriche e report, e verificare una modifica, senza browser né chiamate HTTP autenticate.
+
+- **Confinato per costruzione**: gira su stdio (nessuna porta di rete), agisce per un solo utente (`MCP_USER_EMAIL`) e vede solo i suoi dati. Non ci sono tool su file, token, chiavi AI o altri utenti.
+- **Sola lettura per default**: `health`, `repos_list`, `repo_get`, `repo_metrics`, `reports_list`, `report_get`, `ai_settings`, `notification_settings`. Con `MCP_ALLOW_WRITES=true` si aggiungono `repo_sync`, `report_generate` e `notification_test`.
+- Usa `backend/.env` (database, chiavi) come l'API.
+
+```bash
+cd backend && npm run build      # oppure `npm run mcp` per usarlo da sorgente con tsx
+```
+
+Configurazione per Claude Code (`.mcp.json` nella radice del repository, non versionato perché contiene l'utente):
+
+```json
+{
+  "mcpServers": {
+    "devops-dashboard": {
+      "command": "node",
+      "args": ["backend/dist/mcp/main.js"],
+      "env": { "MCP_USER_EMAIL": "demo@example.com" }
+    }
+  }
+}
+```
 
 ## Deploy
 
@@ -333,6 +359,7 @@ Metriche giornaliere (UTC): `openIssues` e `openPRs` sono lo stato a fine giorna
 - **Deploy da GitHub Actions dopo la CI verde, non dalle integrazioni Git delle piattaforme** — Railway e Vercel deployerebbero a ogni push, anche con i test rossi; con `workflow_run` il deploy parte solo da una CI riuscita su `main`, prima il backend (con le migrazioni) e poi il frontend. Alternativa scartata: integrazioni Git native, più semplici ma senza il vincolo sulla CI.
 - **Body delle richieste validati nel controller con `schema.parse`, senza cast** — prima un middleware validava e il controller rileggeva `req.body as Tipo`: corretto a runtime, ma il tipo non era legato allo schema. Ora il tipo nasce dal parsing e un errore Zod diventa comunque `400` nel middleware centrale. I cast `as` rimasti sono due, su dati interni e commentati.
 - **Un comando `npm run check` alla radice, usato anche dalla CI** — l'equivalente leggero di uno `xtask`: chi lavora sul repo (persona o agente) verifica tutto con un comando, lo stesso che gira in CI. Alternativa scartata: npm workspaces, che cambierebbero lockfile e Dockerfile per un guadagno piccolo.
+- **Server MCP su stdio, un utente, sola lettura per default** — dà agli agenti una porta sullo stesso motore dell'API (i servizi di `createServices`) per verificare il comportamento senza UI. Confinato fin dall'inizio: nessuna porta di rete, nessun accesso a file o segreti, scritture solo con un flag esplicito. Alternativa scartata: MCP su HTTP, che richiederebbe autenticazione e diventerebbe un'altra superficie esposta.
 - **Versioni fissate e Dependabot invece di `latest`** — le CLI di Railway e Vercel nel workflow di deploy hanno una versione precisa (una release di `@railway/cli` ha già rotto i deploy con token di progetto), e Dependabot apre ogni settimana PR raggruppate per npm, GitHub Actions e immagine Docker, che passano dalla CI come ogni modifica. Il `GITHUB_TOKEN` dei workflow ha solo `contents: read`. Alternativa scartata: azioni fissate per SHA, più sicure contro un tag spostato ma superflue con sole azioni ufficiali di GitHub.
 - **Migrazioni nel `preDeployCommand` di Railway invece che all'avvio del server** — se una migrazione fallisce la versione nuova non parte e resta online la precedente; all'avvio, ogni replica proverebbe a migrare e un errore manderebbe il servizio in crash loop.
 - **`VITE_API_URL` verso l'API invece di un rewrite `/api` su Vercel** — i rewrite esterni di Vercel hanno un timeout più corto della generazione di un report (30-90 s) e l'URL di Railway non si conosce quando si scrive `vercel.json`. Il prezzo è il cookie cross-site (vedi "Trade-off").
