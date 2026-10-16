@@ -55,6 +55,17 @@ const envSchema = z.object({
   NOTIFICATION_CHECK_MINUTES: z.coerce.number().int().min(0).default(5),
   // Notifiche di prova per IP ogni 15 minuti.
   NOTIFICATION_TEST_RATE_LIMIT: z.coerce.number().int().positive().default(5),
+  // Log su stderr invece che su stdout (lo imposta il server MCP, che usa stdout per il protocollo).
+  LOG_STDERR: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((value) => value === 'true'),
+  // Server MCP: utente per cui agisce e, se true, abilitazione dei tool che scrivono o inviano.
+  MCP_USER_EMAIL: optionalString,
+  MCP_ALLOW_WRITES: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((value) => value === 'true'),
   // Intervallo del sync automatico dei repository; 0 lo disattiva.
   SYNC_INTERVAL_MINUTES: z.coerce.number().int().min(0).default(360),
   SYNC_RATE_LIMIT: z.coerce.number().int().positive().default(10),

@@ -3,3 +3,6 @@ dist
 coverage
 .env
 *.log
+
+# Configurazione MCP locale (contiene l'utente)
+.mcp.json
