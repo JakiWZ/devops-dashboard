@@ -1,4 +1,4 @@
-import type { z } from 'zod';
+import type { z } from 'zod/mini';
 import { sessionSchema, type Session } from './schemas';
 
 export const API_URL: string = import.meta.env.VITE_API_URL ?? '';
@@ -111,7 +111,7 @@ export async function request(path: string, options: RequestOptions = {}): Promi
 
 export async function requestJson<T>(
   path: string,
-  schema: z.ZodType<T>,
+  schema: z.ZodMiniType<T>,
   options: RequestOptions = {},
 ): Promise<T> {
   const res = await request(path, options);
