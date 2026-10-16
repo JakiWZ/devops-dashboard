@@ -1,8 +1,31 @@
-node_modules
-dist
-coverage
+# Dipendenze e build
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Variabili d'ambiente: solo gli esempi sono versionati
 .env
+.env.*
+!.env.example
+
+# Log
 *.log
+logs/
+
+# Output di Playwright
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
+# Editor e sistema operativo
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.sw?
 
 # Configurazione MCP locale (contiene l'utente)
 .mcp.json
