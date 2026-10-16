@@ -29,7 +29,7 @@ Progetto dimostrativo sviluppato interamente con Claude Code, a fasi, una PR per
 | -------- | -------------------------------------------------------------------------------------------------------------------- |
 | Frontend | React 19.2, TypeScript 5.9, Vite 8.3, Tailwind CSS 4.3, React Router 8.4, TanStack Query 5, Recharts 3, Zod 4 (mini) |
 | Backend  | Node.js 22, Express 5.2, TypeScript 5.9, Zod 4, Pino 10, Octokit 22, Vercel AI SDK 7, SDK Anthropic                  |
-| Database | PostgreSQL 16, Prisma 6.19                                                                                           |
+| Database | PostgreSQL 16, Prisma 7.10                                                                                           |
 | Test     | Jest 30 + Supertest 7 (backend), Vitest 5 (frontend), Playwright 1.63 (E2E)                                          |
 | CI/CD    | GitHub Actions (lint, typecheck, test, build, E2E, immagine Docker), deploy su Railway (API) e Vercel (SPA)          |
 
@@ -309,7 +309,7 @@ Metriche giornaliere (UTC): `openIssues` e `openPRs` sono lo stato a fine giorna
 - **PostgreSQL invece di MongoDB** — i dati sono fortemente relazionali (utente → repository → report/metriche) e le metriche giornaliere richiedono aggregazioni per intervallo di date, dove SQL e gli indici composti brillano. MongoDB scartato: avremmo riprodotto join e vincoli di unicità a livello applicativo.
 - **Prisma invece di Drizzle/TypeORM** — schema dichiarativo unico, migrazioni generate e client completamente tipizzato senza decorator. Drizzle scartato: più vicino a SQL ma con migrazioni e tooling meno maturi; TypeORM scartato per tipizzazione debole e decorator.
 - **Express invece di Fastify/Nest** — ecosistema di middleware più ampio (helmet, rate-limit, pino-http) e Express 5 gestisce nativamente le promise rifiutate. Fastify scartato: più veloce ma il collo di bottiglia qui sono GitHub e LLM, non il framework; Nest scartato: troppa cerimonia per un'API di queste dimensioni.
-- **Prisma 6 invece di 7** — Prisma 7 richiede driver adapter e `prisma.config.ts`; per la fase base restiamo sulla linea stabile più diffusa, migrazione pianificata in seguito.
+- **Prisma 7 con driver adapter `pg`** — nato su Prisma 6, il progetto è passato a 7 quando la CLI di Prisma 6 è risultata vulnerabile (`deepmerge-ts`, nessuna correzione sulla linea 6): ora `npm audit --omit=dev` è pulito. La connessione per migrazioni e seed sta in `prisma.config.ts`, il client usa `@prisma/adapter-pg` invece del motore in Rust. Resta il generatore `prisma-client-js` (output in `node_modules`, stessi import): il nuovo `prisma-client` richiede di cambiare l'import in ogni file e non porta vantaggi qui, quindi è rimandato.
 - **TypeScript 5.9 invece di 6** — ts-jest e typescript-eslint non dichiarano ancora il supporto a TS 6.
 - **Probe del DB iniettabile in `createApp`** — permette di testare `/api/health` senza database reale. Alternativa scartata: mock globale del modulo Prisma, più fragile con ESM.
 - **Vitest per i test unitari frontend** — condivide config e trasformazioni con Vite; Jest scartato lato frontend perché richiederebbe una pipeline di trasformazione separata. Playwright per gli E2E.
@@ -395,7 +395,7 @@ Metriche giornaliere (UTC): `openIssues` e `openPRs` sono lo stato a fine giorna
 - Email HTML con link di disiscrizione in un clic; altri canali (Slack, Discord).
 - Metriche aggiuntive: lead time delle PR, tempo di prima risposta alle issue, durata delle run CI.
 - Supporto a GitLab e Bitbucket dietro la stessa interfaccia `GitHubClient`.
-- Prisma 7 e TypeScript 6 quando gli strumenti li supporteranno.
+- TypeScript 6 quando ts-jest e typescript-eslint lo supporteranno; generatore `prisma-client` di Prisma 7.
 
 ## TODO
 

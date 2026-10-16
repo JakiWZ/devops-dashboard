@@ -1,10 +1,14 @@
+import 'dotenv/config';
+import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient, Role } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { renderReportMarkdown } from '../src/services/reports/markdown.js';
 import type { ReportDraft } from '../src/services/reports/report-draft.js';
 import { buildReportInput, referenceableUrls } from '../src/services/reports/report-input.js';
 
-const prisma = new PrismaClient();
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) throw new Error('DATABASE_URL is required to seed the database');
+const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: databaseUrl }) });
 // Tre mesi di storico: abbastanza per grafici e filtri per intervallo senza un token GitHub.
 const DAYS = 90;
 
