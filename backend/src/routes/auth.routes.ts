@@ -3,14 +3,7 @@ import rateLimit from 'express-rate-limit';
 import { env } from '../config/env.js';
 import { authController } from '../controllers/auth.controller.js';
 import { requireAuth } from '../middleware/auth.js';
-import { validateBody } from '../middleware/validate.js';
 import type { AuthService } from '../services/auth.service.js';
-import {
-  credentialsSchema,
-  forgotPasswordSchema,
-  loginSchema,
-  resetPasswordSchema,
-} from './auth.schemas.js';
 
 export function authRouter(auth: AuthService): Router {
   const router = Router();
@@ -23,13 +16,13 @@ export function authRouter(auth: AuthService): Router {
     legacyHeaders: false,
   });
 
-  router.post('/register', strict, validateBody(credentialsSchema), c.register);
-  router.post('/login', strict, validateBody(loginSchema), c.login);
+  router.post('/register', strict, c.register);
+  router.post('/login', strict, c.login);
   router.post('/refresh', c.refresh);
   router.post('/logout', c.logout);
   router.get('/me', requireAuth, c.me);
-  router.post('/forgot-password', strict, validateBody(forgotPasswordSchema), c.forgotPassword);
-  router.post('/reset-password', strict, validateBody(resetPasswordSchema), c.resetPassword);
+  router.post('/forgot-password', strict, c.forgotPassword);
+  router.post('/reset-password', strict, c.resetPassword);
 
   return router;
 }

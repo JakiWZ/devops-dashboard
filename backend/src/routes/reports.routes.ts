@@ -3,9 +3,7 @@ import rateLimit from 'express-rate-limit';
 import { env } from '../config/env.js';
 import { reportsController } from '../controllers/reports.controller.js';
 import { requireAuth } from '../middleware/auth.js';
-import { validateBody } from '../middleware/validate.js';
 import type { ReportService } from '../services/reports/report.service.js';
-import { createReportSchema } from './reports.schemas.js';
 
 export function reportsRouter(reports: ReportService): Router {
   const router = Router();
@@ -20,7 +18,7 @@ export function reportsRouter(reports: ReportService): Router {
   router.use(requireAuth);
 
   router.get('/', c.list);
-  router.post('/', generateLimit, validateBody(createReportSchema), c.create);
+  router.post('/', generateLimit, c.create);
   router.get('/:id', c.get);
   router.get('/:id/export', c.exportReport);
   router.delete('/:id', c.remove);

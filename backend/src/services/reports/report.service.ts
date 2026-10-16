@@ -78,6 +78,8 @@ export class ReportService {
           repositoryId: repo.id,
           summary: result.draft.summary,
           content,
+          // Bozza già validata con Zod; il cast serve solo perché i tipi JSON di Prisma non
+          // accettano interfacce senza index signature.
           data: result.draft as unknown as Prisma.InputJsonValue,
           model: result.model,
           provider: result.provider,

@@ -173,6 +173,7 @@ export class OctokitGitHubClient implements GitHubClient {
         return response;
       } catch (err) {
         if (cached && err instanceof RequestError && err.status === 304) {
+          // La risposta in cache è quella salvata per la stessa richiesta qui sopra.
           return cached.response as Awaited<ReturnType<typeof request>>;
         }
         throw err;

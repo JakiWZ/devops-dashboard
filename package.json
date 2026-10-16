@@ -1,0 +1,12 @@
+{
+  "name": "devops-dashboard",
+  "private": true,
+  "description": "Comandi che valgono per tutto il repository: usati in locale, dagli agenti e dalla CI.",
+  "scripts": {
+    "setup": "npm ci --prefix backend && npm ci --prefix frontend",
+    "check": "npm run check --prefix backend && npm run check --prefix frontend",
+    "check:backend": "npm run check --prefix backend",
+    "check:frontend": "npm run check --prefix frontend",
+    "test:e2e": "npm run test:e2e --prefix frontend"
+  }
+}

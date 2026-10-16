@@ -6,6 +6,7 @@ import { createOpenAI } from '@ai-sdk/openai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { createXai } from '@ai-sdk/xai';
 import type { LanguageModel } from 'ai';
+import { z } from 'zod';
 import type { CatalogProvider, SupportedSdk } from './catalog.js';
 
 type FetchFn = typeof globalThis.fetch;
@@ -80,22 +81,23 @@ export function modelsRequest(
   return { url: `${url}/models`, headers: { Authorization: `Bearer ${apiKey}` } };
 }
 
+// Risposte dell'endpoint modelli: in formato OpenAI/Anthropic (`data`) o Google (`models`).
+const modelListSchema = z.object({ data: z.unknown(), models: z.unknown() }).partial();
+const modelEntrySchema = z.object({ id: z.unknown(), name: z.unknown() }).partial();
+
 /** Estrae gli id dei modelli dalle risposte in formato OpenAI/Anthropic (`data`) o Google (`models`). */
 export function parseModelIds(body: unknown): string[] | null {
-  if (typeof body !== 'object' || body === null) return null;
-  const record = body as Record<string, unknown>;
-  const list = Array.isArray(record.data)
-    ? record.data
-    : Array.isArray(record.models)
-      ? record.models
-      : null;
+  const parsed = modelListSchema.safeParse(body);
+  if (!parsed.success) return null;
+  const { data, models } = parsed.data;
+  const list = Array.isArray(data) ? data : Array.isArray(models) ? models : null;
   if (!list) return null;
   return list
     .map((item: unknown) => {
-      if (typeof item !== 'object' || item === null) return null;
-      const entry = item as Record<string, unknown>;
-      if (typeof entry.id === 'string') return entry.id;
-      if (typeof entry.name === 'string') return entry.name.replace(/^models\//, '');
+      const entry = modelEntrySchema.safeParse(item);
+      if (!entry.success) return null;
+      if (typeof entry.data.id === 'string') return entry.data.id;
+      if (typeof entry.data.name === 'string') return entry.data.name.replace(/^models\//, '');
       return null;
     })
     .filter((id): id is string => id !== null);

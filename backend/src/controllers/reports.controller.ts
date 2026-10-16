@@ -1,9 +1,9 @@
 import type { Request, RequestHandler } from 'express';
 import { HttpError } from '../lib/http-error.js';
 import {
+  createReportSchema,
   exportQuerySchema,
   listReportsQuerySchema,
-  type CreateReportInput,
 } from '../routes/reports.schemas.js';
 import { renderReportPdf } from '../services/reports/pdf.js';
 import type { ReportService } from '../services/reports/report.service.js';
@@ -27,7 +27,7 @@ function fileName(repositoryName: string, generatedAt: Date, extension: string):
 
 export function reportsController(reports: ReportService) {
   const create: RequestHandler = async (req, res) => {
-    const { repositoryId } = req.body as CreateReportInput;
+    const { repositoryId } = createReportSchema.parse(req.body);
     res.status(201).json({ report: await reports.generate(userId(req), repositoryId) });
   };
 

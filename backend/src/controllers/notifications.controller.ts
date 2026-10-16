@@ -1,7 +1,6 @@
 import type { Request, RequestHandler } from 'express';
 import { HttpError } from '../lib/http-error.js';
-import type { PreferencesBody } from '../routes/notifications.schemas.js';
-import { telegramUpdateSchema } from '../routes/notifications.schemas.js';
+import { preferencesSchema, telegramUpdateSchema } from '../routes/notifications.schemas.js';
 import type { NotificationService } from '../services/notifications/notification.service.js';
 
 function userId(req: Request): string {
@@ -15,7 +14,7 @@ export function notificationsController(notifications: NotificationService) {
   };
 
   const update: RequestHandler = async (req, res) => {
-    res.json(await notifications.update(userId(req), req.body as PreferencesBody));
+    res.json(await notifications.update(userId(req), preferencesSchema.parse(req.body)));
   };
 
   const telegramLink: RequestHandler = async (req, res) => {

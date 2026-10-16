@@ -1,4 +1,4 @@
-import type { z } from 'zod/mini';
+import { z } from 'zod/mini';
 import { sessionSchema, type Session } from './schemas';
 
 export const API_URL: string = import.meta.env.VITE_API_URL ?? '';
@@ -31,18 +31,19 @@ export function setSessionExpiredHandler(handler: (() => void) | null): void {
   onSessionExpired = handler;
 }
 
+const errorBodySchema = z.object({
+  error: z.object({ code: z.optional(z.string()), message: z.optional(z.string()) }),
+});
+
 async function toApiError(res: Response): Promise<ApiError> {
   let code = 'HTTP_ERROR';
   let message = `Request failed (HTTP ${res.status})`;
   try {
     const body: unknown = await res.json();
-    if (typeof body === 'object' && body !== null && 'error' in body) {
-      const error = (body as { error: unknown }).error;
-      if (typeof error === 'object' && error !== null) {
-        const e = error as Record<string, unknown>;
-        if (typeof e.code === 'string') code = e.code;
-        if (typeof e.message === 'string') message = e.message;
-      }
+    const parsed = errorBodySchema.safeParse(body);
+    if (parsed.success) {
+      code = parsed.data.error.code ?? code;
+      message = parsed.data.error.message ?? message;
     }
   } catch {
     // corpo non JSON: resta il messaggio generico

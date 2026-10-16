@@ -3,11 +3,9 @@ import rateLimit from 'express-rate-limit';
 import { env } from '../config/env.js';
 import { githubController, reposController } from '../controllers/repos.controller.js';
 import { requireAuth } from '../middleware/auth.js';
-import { validateBody } from '../middleware/validate.js';
 import type { GitHubAccountService } from '../services/github/github-account.service.js';
 import type { RepoService } from '../services/repos.service.js';
 import type { RepoSyncService } from '../services/sync/sync.service.js';
-import { githubTokenSchema, trackRepoSchema } from './repos.schemas.js';
 
 export function githubRouter(github: GitHubAccountService): Router {
   const router = Router();
@@ -15,7 +13,7 @@ export function githubRouter(github: GitHubAccountService): Router {
   router.use(requireAuth);
 
   router.get('/', c.status);
-  router.put('/token', validateBody(githubTokenSchema), c.connect);
+  router.put('/token', c.connect);
   router.delete('/token', c.disconnect);
 
   return router;
@@ -35,7 +33,7 @@ export function reposRouter(repos: RepoService, sync: RepoSyncService): Router {
 
   router.get('/', c.list);
   router.get('/available', c.available);
-  router.post('/', validateBody(trackRepoSchema), c.track);
+  router.post('/', c.track);
   router.get('/:id', c.get);
   router.delete('/:id', c.remove);
   router.get('/:id/metrics', c.metrics);
